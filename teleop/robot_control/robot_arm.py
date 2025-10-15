@@ -244,25 +244,65 @@ class G1_29_ArmController:
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_29_JointArmIndex])
     
     def ctrl_dual_arm_go_home(self):
-        '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.'''
+        '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.
+        First moves waist to home position, then moves arms.'''
         logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
-        max_attempts = 100
+        tolerance = 0.015  # Tolerance threshold for joint angles to determine "close to zero"
+        
+        # Step 1: Move waist to home position (0, 0) while keeping arms at current position
+        logger_mp.info("[G1_29_ArmController] Step 1: Moving waist to home position...")
+        current_q = self.get_current_arm_waist_q()
+        waist_current = self.get_current_waist_q()
+        
+        # Check if waist needs to move
+        if not np.all(np.abs(waist_current) < tolerance):
+            # Calculate steps to gradually move waist to zero
+            num_steps = 100  # Number of steps for smooth transition
+            waist_start = waist_current.copy()
+            
+            for step in range(num_steps):
+                # Linear interpolation from current position to zero
+                alpha = (step + 1) / num_steps  # 0 to 1
+                waist_target = waist_start * (1 - alpha)  # Gradually decrease to 0
+                with self.ctrl_lock:
+                    # Get current arm positions (they might have changed slightly)
+                    current_arm_q = self.get_current_dual_arm_q()
+                    # Set target: keep arm positions, gradually move waist to zero
+                    self.q_target[:14] =current_arm_q
+                    self.q_target[-2:] = waist_target
+                # Check if waist has reached home position
+                waist_current = self.get_current_waist_q()
+                if np.all(np.abs(waist_current) < tolerance):
+                    logger_mp.info("[G1_29_ArmController] Waist has reached home position.")
+                    break
+                time.sleep(0.05)
+            # Final check
+            waist_current = self.get_current_waist_q()
+            if not np.all(np.abs(waist_current) < tolerance):
+                logger_mp.warning("[G1_29_ArmController] Waist did not fully reach home position.")
+        else:
+            logger_mp.info("[G1_29_ArmController] Waist already at home position.")
+        # Step 2: Move all joints (arms + waist) to home position
+        logger_mp.info("[G1_29_ArmController] Step 2: Moving arms to home position...")
+        max_attempts = 150
         current_attempts = 0
         with self.ctrl_lock:
             self.q_target = np.zeros(16)
             # self.tauff_target = np.zeros(14)
-        tolerance = 0.05  # Tolerance threshold for joint angles to determine "close to zero", can be adjusted based on your motor's precision requirements
         while current_attempts < max_attempts:
-            current_q = self.get_current_dual_arm_q()
+            current_q = self.get_current_arm_waist_q()
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
                     for weight in np.linspace(1, 0, num=101):
                         self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = weight;
                         time.sleep(0.02)
-                logger_mp.info("[G1_29_ArmController] both arms have reached the home position.")
+                logger_mp.info("[G1_29_ArmController] Both arms and waist have reached the home position.")
                 break
             current_attempts += 1
             time.sleep(0.05)
+        
+        if current_attempts >= max_attempts:
+            logger_mp.warning("[G1_29_ArmController] Arms did not reach home position within timeout.")
 
     def speed_gradual_max(self, t = 5.0):
         '''Parameter t is the total time required for arms velocity to gradually increase to its maximum value, in seconds. The default is 5.0.'''

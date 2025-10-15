@@ -224,9 +224,9 @@ if __name__ == '__main__':
         if args.base_type != "None":
             control_data_mapper = ControlDataMapper()
             if args.base_type == "mobile_lift":
-                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, simulation_mode=args.sim)
+                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, args.use_waist, simulation_mode=args.sim)
             else:
-                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, simulation_mode=args.sim)
+                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, args.use_waist, simulation_mode=args.sim)
         else:
             mobile_ctrl=None
         
@@ -351,18 +351,25 @@ if __name__ == '__main__':
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             # For mobile base and elevation control
             if args.base_type != "None" and mobile_ctrl != None:
-                vel_data = control_data_mapper.update(-tele_data.tele_state.left_thumbstick_value[1], -tele_data.tele_state.left_thumbstick_value[0], -tele_data.tele_state.right_thumbstick_value[0], -tele_data.tele_state.right_thumbstick_value[1],
-                tele_data.tele_state.right_aButton, tele_data.tele_state.right_bButton)
-                mobile_ctrl.g1_height_action_array_in[0] = vel_data['height']  
-                if args.base_type == "mobile_lift":
-                    mobile_ctrl.g1_move_action_array_in[0] = vel_data['x_vel']  
-                    mobile_ctrl.g1_move_action_array_in[1] = vel_data['y_vel'] 
-                if args.use_waist:
-                    waist_state = arm_ctrl.get_current_waist_q()
-                    waist_action = np.array([vel_data['yaw_vel']]).tolist()
-                    # waist_sol_tauff = np.zeros(len(waist_action))
-                    sol_q = np.concatenate([sol_q, waist_action])
-                    # sol_tauff = np.concatenate([sol_tauff, waist_sol_tauff])
+                if args.control_device == "unitree_handle":
+                    if args.use_waist:
+                        waist_state = arm_ctrl.get_current_waist_q()
+                        rx = mobile_ctrl.unitree_handle_state_array_out[2]
+                        ry = mobile_ctrl.unitree_handle_state_array_out[3]
+                        vel_data = control_data_mapper.update(rx=-rx, ry=-ry, current_waist_yaw=waist_state[0], current_waist_pitch=waist_state[1])
+                        waist_action = np.array([vel_data['waist_yaw_pos']]).tolist()
+                        sol_q = np.concatenate([sol_q, waist_action])
+                else:
+                    vel_data = control_data_mapper.update(-tele_data.tele_state.left_thumbstick_value[1], -tele_data.tele_state.left_thumbstick_value[0], -tele_data.tele_state.right_thumbstick_value[0], -tele_data.tele_state.right_thumbstick_value[1],
+                    tele_data.tele_state.right_aButton, tele_data.tele_state.right_bButton, current_waist_yaw=waist_state[0], current_waist_pitch=waist_state[1])
+                    mobile_ctrl.g1_height_action_array_in[0] = vel_data['g1_height']  
+                    if args.base_type == "mobile_lift":
+                        mobile_ctrl.g1_move_action_array_in[0] = vel_data['mobile_x_vel']  
+                        mobile_ctrl.g1_move_action_array_in[1] = vel_data['mobile_yaw_vel'] 
+                    if args.use_waist:
+                        waist_state = arm_ctrl.get_current_waist_q()
+                        waist_action = np.array([vel_data['waist_yaw_pos']]).tolist()
+                        sol_q = np.concatenate([sol_q, waist_action])
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
 
 
