@@ -1,8 +1,7 @@
-import numpy as np
 import time
 import argparse
 import cv2
-from multiprocessing import shared_memory, Value, Array, Lock
+from multiprocessing import Value, Array, Lock
 import threading
 import logging_mp
 logging_mp.basic_config(level=logging_mp.INFO)
@@ -20,7 +19,7 @@ from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_Arm
 from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller, Dex1_1_Gripper_Controller
 from teleop.robot_control.robot_hand_inspire import Inspire_Controller
 from teleop.robot_control.robot_hand_brainco import Brainco_Controller
-from teleop.image_server.image_client import ImageClient
+from teleimager import ImageClient
 from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.ipc import IPC_Server
 from sshkeyboard import listen_keyboard, stop_listening
@@ -38,7 +37,7 @@ START          = False  # Enable to start robot following VR user motion
 STOP           = False  # Enable to begin system exit procedure
 RECORD_TOGGLE  = False  # [Ready] ⇄ [Recording] ⟶ [AutoSave] ⟶ [Ready]         (⇄ manual) (⟶ auto)
 RECORD_RUNNING = False  # True if [Recording]
-RECORD_READY   = True   # True if [Ready], False if [Recording] / [AutoSave]
+RECORD_READY   = False  # True if [Ready], False if [Recording] or [AutoSave]
 # task info
 TASK_NAME = None
 TASK_DESC = None
@@ -96,78 +95,25 @@ if __name__ == '__main__':
     logger_mp.info(f"args: {args}")
 
     try:
-        # ipc communication. client usage: see utils/ipc.py
+        # ipc communication mode. client usage: see utils/ipc.py
         if args.ipc:
             ipc_server = IPC_Server(on_press=on_press, on_info=on_info, get_state=get_state)
             ipc_server.start()
-        # sshkeyboard communication
+        # sshkeyboard communication mode
         else:
             listen_keyboard_thread = threading.Thread(target=listen_keyboard, kwargs={"on_press": on_press, "until": None, "sequential": False,}, daemon=True)
             listen_keyboard_thread.start()
 
-        # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
-        if args.sim:
-            img_config = {
-                'fps': 30,
-                'head_camera_type': 'opencv',
-                'head_camera_image_shape': [480, 640],  # Head camera resolution
-                'head_camera_id_numbers': [0],
-                'wrist_camera_type': 'opencv',
-                'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-                'wrist_camera_id_numbers': [2, 4],
-            }
-        else:
-            img_config = {
-                'fps': 30,
-                'head_camera_type': 'opencv',
-                'head_camera_image_shape': [480, 1280],  # Head camera resolution
-                'head_camera_id_numbers': [0],
-                'wrist_camera_type': 'opencv',
-                'wrist_camera_image_shape': [480, 640],  # Wrist camera resolution
-                'wrist_camera_id_numbers': [2, 4],
-            }
+        # image client
+        img_client = ImageClient(host='127.0.0.1')#host='192.168.123.164'
+        if not img_client.has_head_cam():
+            logger_mp.error("Head camera is required. Please enable head camera on the image server side.")
 
-
-        ASPECT_RATIO_THRESHOLD = 2.0 # If the aspect ratio exceeds this value, it is considered binocular
-        if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
-            BINOCULAR = True
-        else:
-            BINOCULAR = False
-        if 'wrist_camera_type' in img_config:
-            WRIST = True
-        else:
-            WRIST = False
-        
-        if BINOCULAR and not (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
-            tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1] * 2, 3)
-        else:
-            tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)
-
-        tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
-        tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
-
-        if WRIST and args.sim:
-            wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
-            wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
-            wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                    wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name, server_address="127.0.0.1")
-        elif WRIST and not args.sim:
-            wrist_img_shape = (img_config['wrist_camera_image_shape'][0], img_config['wrist_camera_image_shape'][1] * 2, 3)
-            wrist_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(wrist_img_shape) * np.uint8().itemsize)
-            wrist_img_array = np.ndarray(wrist_img_shape, dtype = np.uint8, buffer = wrist_img_shm.buf)
-            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name, 
-                                    wrist_img_shape = wrist_img_shape, wrist_img_shm_name = wrist_img_shm.name)
-        else:
-            img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
-
-        image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
-        image_receive_thread.daemon = True
-        image_receive_thread.start()
+        head_img_shape = img_client.get_head_shape()
+        tv_binocular = img_client.is_binocular()
 
         # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-        tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == "hand", img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
-                                    return_state_data=True, return_hand_rot_data = False)
+        tv_wrapper = TeleVuerWrapper(binocular=tv_binocular, use_hand_tracking=args.xr_mode == "hand", img_shape=head_img_shape, return_hand_rot_data = False)
 
         # arm
         if args.arm == "G1_29":
@@ -248,7 +194,7 @@ if __name__ == '__main__':
             sport_client.SetTimeout(0.0001)
             sport_client.Init()
         
-        # record + headless mode
+        # record + headless / non-headless mode
         if args.record and args.headless:
             recorder = EpisodeWriter(task_dir = args.task_dir + args.task_name, task_goal = args.task_desc, frequency = args.frequency, rerun_log = False)
         elif args.record and not args.headless:
@@ -257,15 +203,29 @@ if __name__ == '__main__':
 
         logger_mp.info("Please enter the start signal (enter 'r' to start the subsequent program)")
         while not START and not STOP:
-            time.sleep(0.01)
+            # wait for start signal. by the way, get image and send it to xr
+            head_img, head_img_fps = img_client.get_head_frame()
+            tv_wrapper.set_display_image(head_img)
+            time.sleep(0.033)
         logger_mp.info("start program.")
         arm_ctrl.speed_gradual_max()
+
+        # main loop. robot start to follow VR user's motion
         while not STOP:
             start_time = time.time()
+            # get image
+            head_img, head_img_fps = img_client.get_head_frame()
+            if img_client.has_left_wrist_cam():
+                left_wrist_img, _ = img_client.get_left_wrist_frame()
+            if img_client.has_right_wrist_cam():
+                right_wrist_img, _ = img_client.get_right_wrist_frame()
+            # send head rimage to xr
+            tv_wrapper.set_display_image(head_img)
 
+            # non-headless mode
             if not args.headless:
-                tv_resized_image = cv2.resize(tv_img_array, (tv_img_shape[1] // 2, tv_img_shape[0] // 2))
-                cv2.imshow("record image", tv_resized_image)
+                resized_image = cv2.resize(head_img, (head_img_shape[1] // 2, head_img_shape[0] // 2))
+                cv2.imshow("record image", resized_image)
                 # opencv GUI communication
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
@@ -279,6 +239,7 @@ if __name__ == '__main__':
                     if args.sim:
                         publish_reset_category(2, reset_pose_publisher)
 
+            # record mode
             if args.record and RECORD_TOGGLE:
                 RECORD_TOGGLE = False
                 if not RECORD_RUNNING:
@@ -291,8 +252,9 @@ if __name__ == '__main__':
                     recorder.save_episode()
                     if args.sim:
                         publish_reset_category(1, reset_pose_publisher)
-            # get input data
-            tele_data = tv_wrapper.get_motion_state_data()
+
+            # get xr's tele data
+            tele_data = tv_wrapper.get_tele_data()
             if (args.ee == "dex3" or args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
                 with left_hand_pos_array.get_lock():
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
@@ -300,30 +262,30 @@ if __name__ == '__main__':
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
             elif args.ee == "dex1" and args.xr_mode == "controller":
                 with left_gripper_value.get_lock():
-                    left_gripper_value.value = tele_data.left_trigger_value
+                    left_gripper_value.value = tele_data.left_ctrl_triggerValue
                 with right_gripper_value.get_lock():
-                    right_gripper_value.value = tele_data.right_trigger_value
+                    right_gripper_value.value = tele_data.right_ctrl_triggerValue
             elif args.ee == "dex1" and args.xr_mode == "hand":
                 with left_gripper_value.get_lock():
-                    left_gripper_value.value = tele_data.left_pinch_value
+                    left_gripper_value.value = tele_data.left_hand_pinchValue
                 with right_gripper_value.get_lock():
-                    right_gripper_value.value = tele_data.right_pinch_value
+                    right_gripper_value.value = tele_data.right_hand_pinchValue
             else:
                 pass        
             
             # high level control
             if args.xr_mode == "controller" and args.motion:
                 # quit teleoperate
-                if tele_data.tele_state.right_aButton:
+                if tele_data.right_ctrl_aButton:
                     START = False
                     STOP = True
                 # command robot to enter damping mode. soft emergency stop function
-                if tele_data.tele_state.left_thumbstick_state and tele_data.tele_state.right_thumbstick_state:
+                if tele_data.left_ctrl_thumbstick and tele_data.right_ctrl_thumbstick:
                     sport_client.Damp()
-                # control, limit velocity to within 0.3
-                sport_client.Move(-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                  -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                  -tele_data.tele_state.right_thumbstick_value[0] * 0.3)
+                # https://github.com/unitreerobotics/xr_teleoperate/issues/135, control, limit velocity to within 0.3
+                sport_client.Move(-tele_data.left_ctrl_thumbstickValue[1] * 0.3,
+                                  -tele_data.left_ctrl_thumbstickValue[0] * 0.3,
+                                  -tele_data.right_ctrl_thumbstickValue[0]* 0.3)
 
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
@@ -331,7 +293,7 @@ if __name__ == '__main__':
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
-            sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_arm_pose, tele_data.right_arm_pose, current_lr_arm_q, current_lr_arm_dq)
+            sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_wrist_pose, tele_data.right_wrist_pose, current_lr_arm_q, current_lr_arm_dq)
             time_ik_end = time.time()
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
             arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
@@ -363,9 +325,9 @@ if __name__ == '__main__':
                         left_hand_action = [dual_gripper_action_array[0]]
                         right_hand_action = [dual_gripper_action_array[1]]
                         current_body_state = arm_ctrl.get_current_motor_q().tolist()
-                        current_body_action = [-tele_data.tele_state.left_thumbstick_value[1]  * 0.3,
-                                               -tele_data.tele_state.left_thumbstick_value[0]  * 0.3,
-                                               -tele_data.tele_state.right_thumbstick_value[0] * 0.3]
+                        current_body_action = [-tele_data.left_ctrl_thumbstickValue[1] * 0.3,
+                                               -tele_data.left_ctrl_thumbstickValue[0] * 0.3,
+                                               -tele_data.right_ctrl_thumbstickValue[0]* 0.3]
                 elif (args.ee == "inspire1" or args.ee == "brainco") and args.xr_mode == "hand":
                     with dual_hand_data_lock:
                         left_ee_state = dual_hand_state_array[:6]
@@ -381,11 +343,7 @@ if __name__ == '__main__':
                     right_hand_action = []
                     current_body_state = []
                     current_body_action = []
-                # head image
-                current_tv_image = tv_img_array.copy()
-                # wrist image
-                if WRIST:
-                    current_wrist_image = wrist_img_array.copy()
+
                 # arm state and action
                 left_arm_state  = current_lr_arm_q[:7]
                 right_arm_state = current_lr_arm_q[-7:]
@@ -394,17 +352,19 @@ if __name__ == '__main__':
                 if RECORD_RUNNING:
                     colors = {}
                     depths = {}
-                    if BINOCULAR:
-                        colors[f"color_{0}"] = current_tv_image[:, :tv_img_shape[1]//2]
-                        colors[f"color_{1}"] = current_tv_image[:, tv_img_shape[1]//2:]
-                        if WRIST:
-                            colors[f"color_{2}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{3}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                    if tv_binocular:
+                        colors[f"color_{0}"] = head_img[:, :head_img_shape[1]//2]
+                        colors[f"color_{1}"] = head_img[:, head_img_shape[1]//2:]
+                        if img_client.has_left_wrist_cam():
+                            colors[f"color_{2}"] = left_wrist_img
+                        if img_client.has_right_wrist_cam():
+                            colors[f"color_{3}"] = right_wrist_img
                     else:
-                        colors[f"color_{0}"] = current_tv_image
-                        if WRIST:
-                            colors[f"color_{1}"] = current_wrist_image[:, :wrist_img_shape[1]//2]
-                            colors[f"color_{2}"] = current_wrist_image[:, wrist_img_shape[1]//2:]
+                        colors[f"color_{0}"] = head_img
+                        if img_client.has_left_wrist_cam():
+                            colors[f"color_{1}"] = left_wrist_img
+                        if img_client.has_right_wrist_cam():
+                            colors[f"color_{2}"] = right_wrist_img
                     states = {
                         "left_arm": {                                                                    
                             "qpos":   left_arm_state.tolist(),    # numpy.array -> list
@@ -471,6 +431,8 @@ if __name__ == '__main__':
         logger_mp.info("KeyboardInterrupt, exiting program...")
     finally:
         arm_ctrl.ctrl_dual_arm_go_home()
+        img_client.close()
+        tv_wrapper.close()
 
         if args.ipc:
             ipc_server.stop()
@@ -480,11 +442,6 @@ if __name__ == '__main__':
 
         if args.sim:
             sim_state_subscriber.stop_subscribe()
-        tv_img_shm.close()
-        tv_img_shm.unlink()
-        if WRIST:
-            wrist_img_shm.close()
-            wrist_img_shm.unlink()
 
         if args.record:
             recorder.close()
