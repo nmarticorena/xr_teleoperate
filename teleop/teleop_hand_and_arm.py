@@ -177,7 +177,7 @@ if __name__ == '__main__':
         # arm
         if args.arm == "G1_29":
             arm_ik = G1_29_ArmIK()
-            arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
+            arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim,use_waist=args.use_waist)
         elif args.arm == "G1_23":
             arm_ik = G1_23_ArmIK()
             arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
@@ -223,10 +223,7 @@ if __name__ == '__main__':
         # For mobile base and elevation control
         if args.base_type != "None":
             control_data_mapper = ControlDataMapper()
-            if args.base_type == "mobile_lift":
-                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, args.use_waist, simulation_mode=args.sim)
-            else:
-                mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, args.use_waist, simulation_mode=args.sim)
+            mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.control_device, simulation_mode=args.sim)
         else:
             mobile_ctrl=None
         handle_instruction = HandleInstruction(args.control_device, tv_wrapper, mobile_ctrl)

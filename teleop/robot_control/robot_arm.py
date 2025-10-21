@@ -59,7 +59,7 @@ class DataBuffer:
             self.data = data
 
 class G1_29_ArmController:
-    def __init__(self, motion_mode = False, simulation_mode = False):
+    def __init__(self, motion_mode = False, simulation_mode = False,use_waist=False):
         logger_mp.info("Initialize G1_29_ArmController...")
         self.q_target = np.zeros(16)
         self.tauff_target = np.zeros(16)
@@ -80,7 +80,7 @@ class G1_29_ArmController:
         self._speed_gradual_max = False
         self._gradual_start_time = None
         self._gradual_time = None
-
+        self.use_waist = use_waist
         # initialize lowcmd publisher and lowstate subscriber
         if self.simulation_mode:
             ChannelFactoryInitialize(1)
@@ -251,37 +251,38 @@ class G1_29_ArmController:
         
         # Step 1: Move waist to home position (0, 0) while keeping arms at current position
         logger_mp.info("[G1_29_ArmController] Step 1: Moving waist to home position...")
-        current_q = self.get_current_arm_waist_q()
-        waist_current = self.get_current_waist_q()
-        
-        # Check if waist needs to move
-        if not np.all(np.abs(waist_current) < tolerance):
-            # Calculate steps to gradually move waist to zero
-            num_steps = 50  # Number of steps for smooth transition
-            waist_start = waist_current.copy()
-            
-            for step in range(num_steps):
-                # Linear interpolation from current position to zero
-                alpha = (step + 1) / num_steps  # 0 to 1
-                waist_target = waist_start * (1 - alpha)  # Gradually decrease to 0
-                with self.ctrl_lock:
-                    # Get current arm positions (they might have changed slightly)
-                    current_arm_q = self.get_current_dual_arm_q()
-                    # Set target: keep arm positions, gradually move waist to zero
-                    self.q_target[:14] =current_arm_q
-                    self.q_target[-2:] = waist_target
-                # Check if waist has reached home position
-                waist_current = self.get_current_waist_q()
-                if np.all(np.abs(waist_current) < tolerance):
-                    logger_mp.info("[G1_29_ArmController] Waist has reached home position.")
-                    break
-                time.sleep(0.05)
-            # Final check
+
+        if self.use_waist:
+            current_q = self.get_current_arm_waist_q()
             waist_current = self.get_current_waist_q()
+            # Check if waist needs to move
             if not np.all(np.abs(waist_current) < tolerance):
-                logger_mp.warning("[G1_29_ArmController] Waist did not fully reach home position.")
-        else:
-            logger_mp.info("[G1_29_ArmController] Waist already at home position.")
+                # Calculate steps to gradually move waist to zero
+                num_steps = 50  # Number of steps for smooth transition
+                waist_start = waist_current.copy()
+                
+                for step in range(num_steps):
+                    # Linear interpolation from current position to zero
+                    alpha = (step + 1) / num_steps  # 0 to 1
+                    waist_target = waist_start * (1 - alpha)  # Gradually decrease to 0
+                    with self.ctrl_lock:
+                        # Get current arm positions (they might have changed slightly)
+                        current_arm_q = self.get_current_dual_arm_q()
+                        # Set target: keep arm positions, gradually move waist to zero
+                        self.q_target[:14] =current_arm_q
+                        self.q_target[-2:] = waist_target
+                    # Check if waist has reached home position
+                    waist_current = self.get_current_waist_q()
+                    if np.all(np.abs(waist_current) < tolerance):
+                        logger_mp.info("[G1_29_ArmController] Waist has reached home position.")
+                        break
+                    time.sleep(0.05)
+                # Final check
+                waist_current = self.get_current_waist_q()
+                if not np.all(np.abs(waist_current) < tolerance):
+                    logger_mp.warning("[G1_29_ArmController] Waist did not fully reach home position.")
+            else:
+                logger_mp.info("[G1_29_ArmController] Waist already at home position.")
         # Step 2: Move all joints (arms + waist) to home position
         logger_mp.info("[G1_29_ArmController] Step 2: Moving arms to home position...")
         max_attempts = 100

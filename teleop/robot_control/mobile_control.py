@@ -38,7 +38,12 @@ class G1_Mobile_Lift_Controller:
         """
         logger_mp.info("Initialize G1_Mobile_Lift_Controller...")
         self.init_state = True
-        self.fps = fps
+        # Validate fps parameter to prevent division by zero
+        if fps <= 0:
+            logger_mp.warning(f"Invalid fps value: {fps}, using default value 30.0")
+            self.fps = 30.0
+        else:
+            self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
         self.base_type = base_type 
