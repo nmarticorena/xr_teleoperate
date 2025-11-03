@@ -18,11 +18,10 @@ logger_mp = logging_mp.get_logger(__name__)
 
 kTopicHeightCmd = "rt/cmd_hispeed"
 kTopicHeightState = "rt/hispeed_state"
-kTopicG1MoveCmd = "rt/cmd_vel"
+kTopicG1MoveCmd = "rt/cmd_vel_no_limit"
 kTopicG1MoveState = "rt/slamware_ros_sdk_server_node/odom"
 
-kTopicHeightAction = "rt/cmd_hispeed"
-kTopicMoveAction = "rt/cmd_vel"
+
 
 kTopicUnitreeHandle = "rt/wirelesscontroller"
 
@@ -93,9 +92,7 @@ class G1_Mobile_Lift_Controller:
             # Movement state subscriber
             self.G1MoveState_subscriber = ChannelSubscriber(kTopicG1MoveState, Odometry_)
             self.G1MoveState_subscriber.Init()
-            # Movement action subscriber
-            self.G1MoveAction_subscriber = ChannelSubscriber(kTopicMoveAction, Twist_)
-            self.G1MoveAction_subscriber.Init()
+
 
         self.subscribe_g1_mobilebase_state_thread = threading.Thread(target=self._subscribe_g1_mobilebase_state)
         self.subscribe_g1_mobilebase_state_thread.daemon = True
