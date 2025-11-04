@@ -1,5 +1,19 @@
 # 🔖 Release Note
 
+## 🏷️ v1.4
+
+- The **image server** has been changed to [teleimager](https://github.com/silencht/teleimager). Please refer to the repository README for details.
+
+- [televuer](https://github.com/silencht/televuer) has been upgraded. Please see the repository README for details.
+
+  > The new versions of [teleimager](https://github.com/silencht/teleimager/commit/ab5018691943433c24af4c9a7f3ea0c9a6fbaf3c) + [televuer](https://github.com/silencht/televuer/releases/tag/v3.0) support transmitting head camera images via **WebRTC**.
+
+- Enriched the task information parameters in **recording mode**, fixing and improving EpisodeWriter.
+- Improved the system’s **state machine** information and IPC mode.
+- Added **pass-through mode**, allowing direct viewing of the external environment through a VR device camera (without using the robot’s head camera).
+- Added **CPU affinity mode**. If you are not familiar with this mode, you can ignore it.
+- Added **motion-switcher** functionality, allowing automatic debug mode entry and exit without using a remote controller.
+
 ## 🏷️ v1.3
 
 - add [![Unitree LOGO](https://camo.githubusercontent.com/ff307b29fe96a9b115434a450bb921c2a17d4aa108460008a88c58a67d68df4e/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4769744875622d57696b692d3138313731373f6c6f676f3d676974687562)](https://github.com/unitreerobotics/xr_teleoperate/wiki) [![Unitree LOGO](https://camo.githubusercontent.com/6f5253a8776090a1f89fa7815e7543488a9ec200d153827b4bc7c3cb5e1c1555/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f2d446973636f72642d3538363546323f7374796c653d666c6174266c6f676f3d446973636f7264266c6f676f436f6c6f723d7768697465)](https://discord.gg/ZwcVwxv5rq)

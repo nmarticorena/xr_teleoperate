@@ -13,7 +13,7 @@ import time
 import os
 import sys
 import threading
-from multiprocessing import Process, shared_memory, Array, Value, Lock
+from multiprocessing import Process, Array, Value, Lock
 
 parent2_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(parent2_dir)
@@ -100,7 +100,7 @@ class Dex3_1_Controller:
         hand_control_process.daemon = True
         hand_control_process.start()
 
-        logger_mp.info("Initialize Dex3_1_Controller OK!\n")
+        logger_mp.info("Initialize Dex3_1_Controller OK!")
 
     def _subscribe_hand_state(self):
         while True:
@@ -304,7 +304,7 @@ class Dex1_1_Gripper_Controller:
         self.gripper_control_thread.daemon = True
         self.gripper_control_thread.start()
 
-        logger_mp.info("Initialize Dex1_1_Gripper_Controller OK!\n")
+        logger_mp.info("Initialize Dex1_1_Gripper_Controller OK!")
 
     def _subscribe_gripper_state(self):
         while True:
@@ -406,7 +406,7 @@ class Gripper_JointIndex(IntEnum):
 if __name__ == "__main__":
     import argparse
     from televuer import TeleVuerWrapper
-    from teleop.image_server.image_client import ImageClient
+    from teleimager import ImageClient
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--xr-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device tracking source')
@@ -414,34 +414,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logger_mp.info(f"args:{args}\n")
 
-    # image
-    img_config = {
-        'fps': 30,
-        'head_camera_type': 'opencv',
-        'head_camera_image_shape': [480, 1280],  # Head camera resolution
-        'head_camera_id_numbers': [0],
-    }
-    ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
-    if len(img_config['head_camera_id_numbers']) > 1 or (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
-        BINOCULAR = True
-    else:
-        BINOCULAR = False
-    # image
-    if BINOCULAR and not (img_config['head_camera_image_shape'][1] / img_config['head_camera_image_shape'][0] > ASPECT_RATIO_THRESHOLD):
-        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1] * 2, 3)
-    else:
-        tv_img_shape = (img_config['head_camera_image_shape'][0], img_config['head_camera_image_shape'][1], 3)
-
-    tv_img_shm = shared_memory.SharedMemory(create = True, size = np.prod(tv_img_shape) * np.uint8().itemsize)
-    tv_img_array = np.ndarray(tv_img_shape, dtype = np.uint8, buffer = tv_img_shm.buf)
-    img_client = ImageClient(tv_img_shape = tv_img_shape, tv_img_shm_name = tv_img_shm.name)
-    image_receive_thread = threading.Thread(target = img_client.receive_process, daemon = True)
-    image_receive_thread.daemon = True
-    image_receive_thread.start()
+    # image client
+    img_client = ImageClient(host='127.0.0.1') #host='192.168.123.164'
+    if not img_client.has_head_cam():
+        logger_mp.error("Head camera is required. Please enable head camera on the image server side.")
+    head_img_shape = img_client.get_head_shape()
+    tv_binocular = img_client.head_is_binocular()
 
     # television: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-    tv_wrapper = TeleVuerWrapper(binocular=BINOCULAR, use_hand_tracking=args.xr_mode == "hand", img_shape=tv_img_shape, img_shm_name=tv_img_shm.name, 
-                                 return_state_data=True, return_hand_rot_data = False)
+    tv_wrapper = TeleVuerWrapper(binocular=tv_binocular, use_hand_tracking=args.xr_mode == "hand", img_shape=head_img_shape, return_hand_rot_data = False)
 
 # end-effector
     if args.ee == "dex3":
@@ -462,7 +443,9 @@ if __name__ == "__main__":
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):\n")
     if user_input.lower() == 's':
         while True:
-            tele_data = tv_wrapper.get_motion_state_data()
+            head_img, head_img_fps = img_client.get_head_frame()
+            tv_wrapper.set_display_image(head_img)
+            tele_data = tv_wrapper.get_tele_data()
             if args.ee == "dex3" and args.xr_mode == "hand":
                 with left_hand_pos_array.get_lock():
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
@@ -470,14 +453,14 @@ if __name__ == "__main__":
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
             elif args.ee == "dex1" and args.xr_mode == "controller":
                 with left_gripper_value.get_lock():
-                    left_gripper_value.value = tele_data.left_trigger_value
+                    left_gripper_value.value = tele_data.left_ctrl_triggerValue
                 with right_gripper_value.get_lock():
-                    right_gripper_value.value = tele_data.right_trigger_value
+                    right_gripper_value.value = tele_data.right_ctrl_triggerValue
             elif args.ee == "dex1" and args.xr_mode == "hand":
                 with left_gripper_value.get_lock():
-                    left_gripper_value.value = tele_data.left_pinch_value
+                    left_gripper_value.value = tele_data.left_hand_pinchValue
                 with right_gripper_value.get_lock():
-                    right_gripper_value.value = tele_data.right_pinch_value
+                    right_gripper_value.value = tele_data.right_hand_pinchValue
             else:
                 pass
 

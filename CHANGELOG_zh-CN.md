@@ -1,5 +1,23 @@
 # 🔖 版本说明
 
+## 🏷️ v1.4
+
+- **图像服务器**变更为 [teleimager](https://github.com/silencht/teleimager)，具体请查看仓库README。
+
+- 升级 [televuer](https://github.com/silencht/televuer)，具体请查看仓库README。
+
+  > 新版本的 [teleimager](https://github.com/silencht/teleimager/commit/ab5018691943433c24af4c9a7f3ea0c9a6fbaf3c) + [televuer](https://github.com/silencht/televuer/releases/tag/v3.0) 支持通过 **webrtc** 传输头部相机图像
+
+- 丰富**录制模式**下的任务信息传递参数，修复和完善 EpisodeWriter。
+
+- 完善系统的**状态机信息**、IPC模式。
+
+- 新增 **pass-through 模式**，可以通过VR设备摄像头直接透视外界环境（而不借助机器人头部相机）
+
+- 新增 **affinity CPU 亲和模式**，如果你不了解该模式，那么请无视它。
+
+- 新增 **motion-switcher 功能**，无需遥控器即可自动进退 debug 模式。
+
 ## 🏷️ v1.3
 
 - 添加 [![Unitree LOGO](https://camo.githubusercontent.com/ff307b29fe96a9b115434a450bb921c2a17d4aa108460008a88c58a67d68df4e/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4769744875622d57696b692d3138313731373f6c6f676f3d676974687562)](https://github.com/unitreerobotics/xr_teleoperate/wiki) [![Unitree LOGO](https://camo.githubusercontent.com/6f5253a8776090a1f89fa7815e7543488a9ec200d153827b4bc7c3cb5e1c1555/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f2d446973636f72642d3538363546323f7374796c653d666c6174266c6f676f3d446973636f7264266c6f676f436f6c6f723d7768697465)](https://discord.gg/ZwcVwxv5rq)

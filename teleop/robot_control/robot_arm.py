@@ -115,7 +115,7 @@ class G1_29_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.debug(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.debug(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        logger_mp.info("Lock all joints except two arms...")
 
         arm_indices = set(member.value for member in G1_29_JointArmIndex)
         for id in G1_29_JointIndex:
@@ -150,7 +150,7 @@ class G1_29_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        logger_mp.info("Initialize G1_29_ArmController OK!\n")
+        logger_mp.info("Initialize G1_29_ArmController OK!")
 
     def _subscribe_motor_state(self):
         while True:
@@ -495,7 +495,7 @@ class G1_23_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        logger_mp.info("Lock all joints except two arms...")
 
         arm_indices = set(member.value for member in G1_23_JointArmIndex)
         for id in G1_23_JointIndex:
@@ -515,7 +515,7 @@ class G1_23_ArmController:
                     self.msg.motor_cmd[id].kp = self.kp_high
                     self.msg.motor_cmd[id].kd = self.kd_high
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        logger_mp.info("Lock OK!\n")
+        logger_mp.info("Lock OK!")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -523,7 +523,7 @@ class G1_23_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        logger_mp.info("Initialize G1_23_ArmController OK!\n")
+        logger_mp.info("Initialize G1_23_ArmController OK!")
 
     def _subscribe_motor_state(self):
         while True:
@@ -775,7 +775,7 @@ class H1_2_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        logger_mp.info("Lock all joints except two arms...")
 
         arm_indices = set(member.value for member in H1_2_JointArmIndex)
         for id in H1_2_JointIndex:
@@ -795,7 +795,7 @@ class H1_2_ArmController:
                     self.msg.motor_cmd[id].kp = self.kp_high
                     self.msg.motor_cmd[id].kd = self.kd_high
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        logger_mp.info("Lock OK!\n")
+        logger_mp.info("Lock OK!")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -803,7 +803,7 @@ class H1_2_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        logger_mp.info("Initialize H1_2_ArmController OK!\n")
+        logger_mp.info("Initialize H1_2_ArmController OK!")
 
     def _subscribe_motor_state(self):
         while True:
@@ -1057,7 +1057,7 @@ class H1_ArmController:
         self.all_motor_q = self.get_current_motor_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
-        logger_mp.info("Lock all joints except two arms...\n")
+        logger_mp.info("Lock all joints except two arms...")
 
         for id in H1_JointIndex:
             if self._Is_weak_motor(id):
@@ -1069,7 +1069,7 @@ class H1_ArmController:
                 self.msg.motor_cmd[id].kd = self.kd_high
                 self.msg.motor_cmd[id].mode = 0x0A
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
-        logger_mp.info("Lock OK!\n")
+        logger_mp.info("Lock OK!")
 
         # initialize publish thread
         self.publish_thread = threading.Thread(target=self._ctrl_motor_state)
@@ -1077,7 +1077,7 @@ class H1_ArmController:
         self.publish_thread.daemon = True
         self.publish_thread.start()
 
-        logger_mp.info("Initialize H1_ArmController OK!\n")
+        logger_mp.info("Initialize H1_ArmController OK!")
 
     def _subscribe_motor_state(self):
         while True:
