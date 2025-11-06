@@ -206,9 +206,9 @@ if __name__ == '__main__':
         if args.base_type != "legs":
             control_data_mapper = ControlDataMapper()
             mobile_ctrl = G1_Mobile_Lift_Controller(args.base_type, args.r3_controller, simulation_mode=args.sim)
+            handle_instruction = HandleInstruction(args.r3_controller, tv_wrapper, mobile_ctrl)
         else:
             mobile_ctrl=None
-        handle_instruction = HandleInstruction(args.r3_controller, tv_wrapper, mobile_ctrl)
         # affinity mode (if you dont know what it is, then you probably don't need it)
         if args.affinity:
             import psutil
@@ -334,7 +334,7 @@ if __name__ == '__main__':
             move_action = [0.0, 0.0]
             waist_state = None
             waist_action = None
-            if  mobile_ctrl != None:
+            if  mobile_ctrl is not None:
                 height_state = mobile_ctrl.g1_height_state_array_out
                 handle_instruction_data = handle_instruction.get_instruction()
                 vel_data = control_data_mapper.update(rbutton_A=handle_instruction_data['rbutton_A'], rbutton_B=handle_instruction_data['rbutton_B'])
