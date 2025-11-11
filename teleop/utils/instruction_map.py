@@ -185,14 +185,14 @@ class HandleInstruction:
             lbutton_A = False
             lbutton_B = False
         elif self.control_device == "other" and self.tv_wrapper is not None:
-            lx = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[1]
-            ly = -self.tv_wrapper.get_motion_state_data().tele_state.left_thumbstick_value[0]
-            rx = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[0]
-            ry = -self.tv_wrapper.get_motion_state_data().tele_state.right_thumbstick_value[1]
-            rbutton_A = self.tv_wrapper.get_motion_state_data().tele_state.right_aButton
-            rbutton_B = self.tv_wrapper.get_motion_state_data().tele_state.right_bButton
-            lbutton_A = self.tv_wrapper.get_motion_state_data().tele_state.left_aButton
-            lbutton_B = self.tv_wrapper.get_motion_state_data().tele_state.left_bButton
+            lx = -self.tv_wrapper.get_tele_data().left_ctrl_thumbstickValue[1]
+            ly = -self.tv_wrapper.get_tele_data().left_ctrl_thumbstickValue[0]
+            rx = -self.tv_wrapper.get_tele_data().right_ctrl_thumbstickValue[0]
+            ry = -self.tv_wrapper.get_tele_data().right_ctrl_thumbstickValue[1]
+            rbutton_A = self.tv_wrapper.get_tele_data().right_ctrl_aButton
+            rbutton_B = self.tv_wrapper.get_tele_data().right_ctrl_bButton
+            lbutton_A = self.tv_wrapper.get_tele_data().left_ctrl_aButton
+            lbutton_B = self.tv_wrapper.get_tele_data().left_ctrl_bButton
         return {'lx': lx, 'ly': ly, 'rx': rx, 'ry': ry, 'rbutton_A': rbutton_A, 'rbutton_B': rbutton_B, 'lbutton_A': lbutton_A, 'lbutton_B': lbutton_B}
 
 
