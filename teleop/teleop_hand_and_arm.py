@@ -361,7 +361,7 @@ if __name__ == '__main__':
                 waist_state = arm_ctrl.get_current_waist_q()
                 # print(f"waist_state:{waist_state[1]}")
                 gravity_feedforward_data = arm_ctrl.get_gravity_feedforward_data(waist_state[1])
-                print(f"gravity_feedforward_data:{gravity_feedforward_data}")
+                # print(f"gravity_feedforward_data:{gravity_feedforward_data}")
 
                 vel_data = control_data_mapper.update(
                     rx=handle_instruction_data['rx'],
