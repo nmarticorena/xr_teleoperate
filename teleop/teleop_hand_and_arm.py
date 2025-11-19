@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire_ftp', 'inspire_dfx', 'brainco'], help='Select end effector controller')
     
     # mobile base, elevation and waist control
-    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','legs'], default='mobile_lift', help='Select lower body type')
+    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','legs'], default='legs', help='Select lower body type')
     parser.add_argument('--use-waist', action = 'store_false', help = 'Enable waist control')
 
     # mode flags
@@ -360,9 +360,7 @@ if __name__ == '__main__':
             if args.use_waist:
                 handle_instruction_data = handle_instruction.get_instruction()
                 waist_state = arm_ctrl.get_current_waist_q()
-                # print(f"waist_state:{waist_state[1]}")
                 gravity_feedforward_data = arm_ctrl.get_gravity_feedforward_data(waist_state[1])
-                # print(f"gravity_feedforward_data:{gravity_feedforward_data}")
 
                 vel_data = control_data_mapper.update(
                     rx=handle_instruction_data['rx'],
@@ -372,8 +370,6 @@ if __name__ == '__main__':
                     current_waist_pitch=waist_state[1]
                 )
                 waist_action = np.array([vel_data['waist_yaw_pos'], vel_data['waist_pitch_pos']])
-                # logger_mp.info(f"waist_state:{waist_state}")
-                # logger_mp.info(f"waist_action:{waist_action}")
                 
                 sol_q = np.concatenate([sol_q, waist_action])
             else:
@@ -383,7 +379,6 @@ if __name__ == '__main__':
             except Exception as e:
                 logger_mp.error(f"Error 2: {e}")
                 raise e
-            # print(f"--------------------------------")
             # record data
             if args.record:
                 READY = recorder.is_ready() # now ready to (2) enter RECORD_RUNNING state
@@ -543,7 +538,6 @@ if __name__ == '__main__':
                         
                     }
                     if mobile_ctrl != None:
-                        # 动态添加 torso 键 (Dynamically add torso key)
                         states["torso"] = {
                             "height": np.array(height_state[0]).tolist(),
                             "qvel": np.array(height_state[1]).tolist()
@@ -626,4 +620,4 @@ if __name__ == '__main__':
         except Exception as e:
             logger_mp.error(f"Failed to close recorder: {e}")
         logger_mp.info("Finally, exiting program.")
-        exit(0)
+        os._exit(0)

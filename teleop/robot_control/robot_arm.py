@@ -82,7 +82,7 @@ class G1_29_ArmController:
         self._gradual_time = None
         self.use_waist = use_waist
         self.gravity_feedforward = GravityFeedforward(
-            urdf_path="/home/unitree3/code/mobile_teleop/xr_teleoperate/assets/g1_D/g1_d.urdf",
+            urdf_path="../assets/g1_D/g1_d.urdf",
             joint_names=["waist_pitch_joint"]
         )
 
@@ -135,8 +135,11 @@ class G1_29_ArmController:
             else:
                 if self._Is_weak_motor(id):
                     if self._Is_waistPitch(id):
-                        self.msg.motor_cmd[id].kp = 400
+                        self.msg.motor_cmd[id].kp = 500
                         self.msg.motor_cmd[id].kd = 3.0 #self.kd_high
+                    elif self._Is_waistYaw(id):
+                        self.msg.motor_cmd[id].kp = 100
+                        self.msg.motor_cmd[id].kd = 2.0 #self.kd_high
                     else:
                         self.msg.motor_cmd[id].kp = self.kp_low
                         self.msg.motor_cmd[id].kd = self.kd_low
@@ -146,10 +149,10 @@ class G1_29_ArmController:
             self.msg.motor_cmd[id].q  = self.all_motor_q[id]
             
             if id.value == G1_29_JointWaistIndex.kWaistYaw.value:
-                self.q_target[-2] = self.all_motor_q[id]
+                self.q_target[-2] = self.msg.motor_cmd[id].q 
                 self.tauff_target[-2] = 0
             elif id.value == G1_29_JointWaistIndex.kWaistPitch.value:
-                self.q_target[-1] = self.all_motor_q[id]
+                self.q_target[-1] = self.msg.motor_cmd[id].q
                 self.tauff_target[-1] = -10
         logger_mp.info("Lock OK!\n")
         self.waist_state = self.get_current_waist_q()
@@ -194,12 +197,10 @@ class G1_29_ArmController:
             else:
                 cliped_q_target = self.clip_arm_q_target(q_target, velocity_limit = self.arm_velocity_limit)
                     
-                    
-            # logger_mp.info(f"cliped_q_target:{cliped_q_target}")
             for idx, id in enumerate(G1_29_JointArmWaistIndex):
                 self.msg.motor_cmd[id].q = cliped_q_target[idx]
                 self.msg.motor_cmd[id].dq = 0
-                if id == G1_29_JointArmWaistIndex.kWaistPitch:
+                if id == G1_29_JointWaistIndex.kWaistPitch:
                     self.msg.motor_cmd[id].tau = self.tauf
                 else:
                     if idx < len(tauff_target):
@@ -216,8 +217,6 @@ class G1_29_ArmController:
             all_t_elapsed = current_time - start_time
             sleep_time = max(0, (self.control_dt - all_t_elapsed))
             time.sleep(sleep_time)
-            # logger_mp.debug(f"arm_velocity_limit:{self.arm_velocity_limit}")
-            # logger_mp.debug(f"sleep_time:{sleep_time}")
 
     def ctrl_dual_arm(self, q_target, tauff_target, gravity_feedforward_tau=None):
         '''Set control target values q & tau of the left and right arm motors.'''
@@ -226,9 +225,7 @@ class G1_29_ArmController:
         else:
             self.tauf = gravity_feedforward_tau
         q_arr = np.atleast_1d(q_target)
-        # logger_mp.info(f"q_target:{q_target}")
-        # logger_mp.info(f"q_arr:{q_arr}")
-        # logger_mp.info(f"q_arr.shape:{q_arr.shape}")
+
         if q_arr.shape[0] == 14:
             with self.ctrl_lock:
                 self.q_target[:14] = q_arr[:14]
@@ -240,7 +237,6 @@ class G1_29_ArmController:
         elif q_arr.shape[0] == 16:
             with self.ctrl_lock:
                 self.q_target[:16] = q_arr[:16]
-                # logger_mp.info(f"q_target:{self.q_target}")
                 self.tauff_target[:14] = tauff_target[:14]
         else:
             raise ValueError(f"Invalid q_target shape: {q_arr.shape}")
@@ -309,7 +305,7 @@ class G1_29_ArmController:
         '''Move both the left and right arms of the robot to their home position by setting the target joint angles (q) and torques (tau) to zero.
         First moves waist to home position, then moves arms.'''
         logger_mp.info("[G1_29_ArmController] ctrl_dual_arm_go_home start...")
-        tolerance = 0.015  # Tolerance threshold for joint angles to determine "close to zero"
+        tolerance = 0.02  # Tolerance threshold for joint angles to determine "close to zero"
         time.sleep(0.1)
         self.ctrl_waist_go_home()
         # Step 2: Move all joints (arms + waist) to home position
@@ -319,7 +315,7 @@ class G1_29_ArmController:
         with self.ctrl_lock:
             self.q_target = np.zeros(16)
         while current_attempts < max_attempts:
-            current_q = self.get_current_arm_waist_q()
+            current_q = self.get_current_dual_arm_q()
             if np.all(np.abs(current_q) < tolerance):
                 if self.motion_mode:
                     for weight in np.linspace(1, 0, num=101):
@@ -359,8 +355,8 @@ class G1_29_ArmController:
             G1_29_JointIndex.kRightElbow.value,
 
             # Waist
-            G1_29_JointIndex.kWaistYaw.value,
-            G1_29_JointIndex.kWaistPitch.value,
+            G1_29_JointWaistIndex.kWaistYaw.value,
+            G1_29_JointWaistIndex.kWaistPitch.value,
         ]
         return motor_index.value in weak_motors
     
@@ -376,7 +372,12 @@ class G1_29_ArmController:
         return motor_index.value in wrist_motors
     def _Is_waistPitch(self, motor_index):
         waist_motors = [
-            G1_29_JointIndex.kWaistPitch.value
+            G1_29_JointWaistIndex.kWaistPitch.value
+        ]
+        return motor_index.value in waist_motors
+    def _Is_waistYaw(self, motor_index):
+        waist_motors = [
+            G1_29_JointWaistIndex.kWaistYaw.value
         ]
         return motor_index.value in waist_motors
 class G1_29_JointArmIndex(IntEnum):

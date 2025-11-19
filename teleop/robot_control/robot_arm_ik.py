@@ -268,7 +268,7 @@ class G1_29_ArmIK:
 
             # return sol_q, sol_tauff
             return current_lr_arm_motor_q, np.zeros(self.reduced_robot.model.nv)
-    def matrix_to_xyzrpy(T):
+    def matrix_to_xyzrpy(self, T):
         """
         将 4x4 齐次变换矩阵转换为位置(x, y, z) + 欧拉角(r, p, y)（弧度）
         """
@@ -276,19 +276,38 @@ class G1_29_ArmIK:
         xyz = T[:3, 3]
         rpy = R.from_matrix(T[:3, :3]).as_euler('xyz', degrees=False)
         return np.concatenate([xyz, rpy])
+    
     def solve_fk(self, q_full):
-        assert q_full.shape == (self.reduced_robot.model.nq,)
-
-        pin.forwardKinematics(self.reduced_robot.model, self.reduced_robot.data, q_full)
-        pin.updateFramePlacements(self.reduced_robot.model, self.reduced_robot.data)
-
-        ee_pose_l = self.reduced_robot.data.oMf[self.reduced_robot.model.getFrameId("L_ee")].homogeneous
-        ee_pose_r = self.reduced_robot.data.oMf[self.reduced_robot.model.getFrameId("R_ee")].homogeneous
+        assert q_full.shape == (self.reduced_robot.model.nq,), f"Expected shape ({self.reduced_robot.model.nq},), got {q_full.shape}"
         
-        ee_xyzrpy_l = self.matrix_to_xyzrpy(ee_pose_l)
-        ee_xyzrpy_r = self.matrix_to_xyzrpy(ee_pose_r)
-        
-        return ee_xyzrpy_l, ee_xyzrpy_r
+        try:
+            pin.forwardKinematics(self.reduced_robot.model, self.reduced_robot.data, q_full)
+            
+            # Use pre-computed frame IDs from __init__
+            L_ee_id = self.L_hand_id
+            R_ee_id = self.R_hand_id
+            
+            # Update frame placements individually using updateFramePlacement
+            # This ensures frames are updated even if oMf array size doesn't match nframes
+            # Note: updateFramePlacement returns a reference to data.oMf[frame_id], 
+            # we need to copy the homogeneous matrix immediately to avoid memory issues
+            ee_pose_l_se3 = pin.updateFramePlacement(self.reduced_robot.model, self.reduced_robot.data, L_ee_id)
+            ee_pose_r_se3 = pin.updateFramePlacement(self.reduced_robot.model, self.reduced_robot.data, R_ee_id)
+            
+            # Copy the homogeneous matrix data immediately to avoid reference issues
+            ee_pose_l = ee_pose_l_se3.homogeneous.copy()
+            ee_pose_r = ee_pose_r_se3.homogeneous.copy()
+            
+            ee_xyzrpy_l = self.matrix_to_xyzrpy(ee_pose_l)
+            ee_xyzrpy_r = self.matrix_to_xyzrpy(ee_pose_r)
+            
+            return ee_xyzrpy_l, ee_xyzrpy_r
+        except Exception as e:
+            logger_mp.error(f"Error in solve_fk: {e}")
+            logger_mp.error(f"q_full shape: {q_full.shape}, model.nq: {self.reduced_robot.model.nq}")
+            logger_mp.error(f"L_hand_id: {self.L_hand_id}, R_hand_id: {self.R_hand_id}")
+            logger_mp.error(f"oMf length: {len(self.reduced_robot.data.oMf)}, nframes: {self.reduced_robot.model.nframes}")
+            raise
 class G1_23_ArmIK:
     def __init__(self, Unit_Test = False, Visualization = False):
         np.set_printoptions(precision=5, suppress=True, linewidth=200)

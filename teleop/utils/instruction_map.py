@@ -60,11 +60,13 @@ class ControlDataMapper:
         self.mobile_x_vel = 0
         self.mobile_yaw_vel = 0
         self.arm_ctrl = arm_ctrl
-        # 定义腰部变量
+
         self.PITCH_MAX = 2.36
-        self.PITCH_MIN = -0.035   #-2度
-        self.last_timestamp = time.perf_counter()  # 使用高性能计时器
-        self.waist_pitch_pos = self.arm_ctrl.get_current_waist_q()[1]  # 初始位置
+        self.PITCH_MIN = -0.035   
+        self.last_timestamp = time.perf_counter()  
+        waist_state = self.arm_ctrl.get_current_waist_q()
+        self.waist_pitch_pos =   waist_state[1]
+        self.waist_yaw_pos = waist_state[0]  
     def update(self, lx=None, ly=None, rx=None, ry=None, rbutton_A=None, rbutton_B=None, 
                current_waist_yaw=None,current_waist_pitch=None):
         """
@@ -99,7 +101,7 @@ class ControlDataMapper:
         if rx is not None and current_waist_yaw is not None:
             waist_yaw_pos = self._update_waist_position(rx, current_waist_yaw,max_velocity=0.05,min_position=-2.5,max_position=2.5)
         elif current_waist_yaw is not None:
-            waist_yaw_pos = current_waist_yaw
+            waist_yaw_pos = self.waist_yaw_pos
         else:
             waist_yaw_pos = 0.0
 
@@ -108,7 +110,7 @@ class ControlDataMapper:
         else:
             self.height_speed_value = 0
         if rbutton_A or rbutton_B:
-            waist_pitch_pos = self._update_waist_picth_button(rbutton_A,rbutton_B,max_velocity=12.0,min_position=-0.02,max_position=2.3)
+            waist_pitch_pos = self._update_waist_picth_button(rbutton_A,rbutton_B,max_velocity=10.0,min_position=-0.02,max_position=2.3)
         else:
             waist_pitch_pos = self.waist_pitch_pos
         return {
@@ -139,7 +141,7 @@ class ControlDataMapper:
         
         if abs(raw_value) < deadzone:
             # Joystick in deadzone, maintain current position
-            return current_position
+            return self.waist_yaw_pos
         else:
             # Calculate velocity based on joystick input
             # Positive joystick -> increase position
@@ -150,74 +152,32 @@ class ControlDataMapper:
             velocity = sign * smooth * max_velocity
             
             # Calculate new position based on current position
-            new_position = current_position + velocity
+            self.waist_yaw_pos = current_position + velocity
             
             # Clamp to valid range
-            new_position = np.clip(new_position, min_position, max_position)
+            self.waist_yaw_pos = np.clip(self.waist_yaw_pos, min_position, max_position)
             
-            return new_position
+            return self.waist_yaw_pos
     def _update_waist_picth_button(self,rbutton_A,rbutton_B,max_velocity=8.0,min_position=-0.02,max_position=2.3):
-        # 时间差值
+        
         current_timestamp = time.perf_counter()
         delta_t = current_timestamp - self.last_timestamp
         self.last_timestamp = current_timestamp
-        if delta_t <= 0 or delta_t > 0.1:  # 限制最大时间差为100ms，避免异常跳跃
+        if delta_t <= 0 or delta_t > 0.1: 
             return self.waist_pitch_pos
-
-        # 初始化delta_q
         delta_q = 0.0
-        # 处理按钮A（正方向）
         if rbutton_A and self.waist_pitch_pos < max_position:
             delta_q = delta_t * ((max_position - min_position) / max_velocity)
 
-        # 处理按钮B（负方向）
+        
         elif rbutton_B and self.waist_pitch_pos > min_position:  # 使用elif避免同时按下
             delta_q = -delta_t * ((max_position - min_position) / max_velocity)
-        # 更新pitch位置
+        
         if delta_q != 0:
             self.waist_pitch_pos += delta_q
-            # 限制位置在合法范围内
             self.waist_pitch_pos = min(max_position, max(min_position, self.waist_pitch_pos))
         return self.waist_pitch_pos
-    def _update_waist_pitch(self,raw_value,min_position,max_position,max_velocity=1000.0):
-        # 时间差值
-        current_timestamp = time.perf_counter()
-        delta_t = current_timestamp - self.last_timestamp
-        self.last_timestamp = current_timestamp
-        if delta_t <= 0 or delta_t > 0.1:  # 限制最大时间差为100ms，避免异常跳跃
-            return self.waist_pitch_pos
 
-        # 初始化delta_q
-        delta_q = 0.0
-        # 处理按钮A（正方向）
-        if raw_value>0.9 and self.waist_pitch_pos < max_position:
-            delta_q = delta_t * ((max_position - min_position) / max_velocity)
-
-        # 处理按钮B（负方向）
-        elif raw_value<-0.9 and self.waist_pitch_pos > min_position:  # 使用elif避免同时按下
-            delta_q = -delta_t * ((max_position - min_position) / max_velocity)
-        
-        # 更新pitch位置
-        if delta_q != 0:
-            self.waist_pitch_pos += delta_q
-            # 限制位置在合法范围内
-            self.waist_pitch_pos = max(min_position, max(max_position, self.waist_pitch_pos))
-        return self.waist_pitch_pos
-    def _update_height_button(self,rbutton_A,rbutton_B):
-        """
-        Update height value
-        Height remains unchanged when joystick is released (won't drop down)
-        
-        Args:
-            rbutton_A: Right button A raw value (0 or 1)
-            rbutton_B: Right button B raw value (0 or 1)
-        """
-        if rbutton_B:
-            self.height_speed_value = 0.5
-        elif rbutton_A:
-            self.height_speed_value = -0.5
-        else:
-            self.height_speed_value = 0.0
     def _update_height(self, raw_value):
         """
         Update height value

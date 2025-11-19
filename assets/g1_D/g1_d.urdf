@@ -105,7 +105,8 @@
   <link name="torso_link">
     <inertial>
       <origin xyz="0.000931 0.000346 0.15082" rpy="0 0 0"/>
-      <mass value="6.78"/>
+      <!-- +4 -->
+      <mass value="10.78"/>
       <inertia ixx="0.05905" ixy="3.3302E-05" ixz="-0.0017715" iyy="0.047014" iyz="-2.2399E-05" izz="0.025652"/>
     </inertial>
     <visual>
@@ -165,7 +166,7 @@
   <link name="head_link">
     <inertial>
       <origin xyz="0.005267 0.000299 0.449869" rpy="0 0 0"/>
-      <mass value="1.036"/>
+      <mass value="4.036"/>
       <inertia ixx="0.004085051" ixy="-2.543E-06" ixz="-6.9455E-05" iyy="0.004185212" iyz="-3.726E-06" izz="0.001807911"/>
     </inertial>
     <visual>
