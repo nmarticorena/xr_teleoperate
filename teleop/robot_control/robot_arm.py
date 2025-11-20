@@ -136,10 +136,10 @@ class G1_29_ArmController:
                 if self._Is_weak_motor(id):
                     if self._Is_waistPitch(id):
                         self.msg.motor_cmd[id].kp = 500
-                        self.msg.motor_cmd[id].kd = 3.0 #self.kd_high
+                        self.msg.motor_cmd[id].kd = 3.0 
                     elif self._Is_waistYaw(id):
                         self.msg.motor_cmd[id].kp = 100
-                        self.msg.motor_cmd[id].kd = 2.0 #self.kd_high
+                        self.msg.motor_cmd[id].kd = 2.0
                     else:
                         self.msg.motor_cmd[id].kp = self.kp_low
                         self.msg.motor_cmd[id].kd = self.kd_low
@@ -263,9 +263,7 @@ class G1_29_ArmController:
     def get_current_dual_arm_dq(self):
         '''Return current state dq of the left and right arm motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].dq for id in G1_29_JointArmIndex])
-    def get_current_joint_q(self):
-        '''Return current state q of the joint.'''
-        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_D_JointIndex])
+
     def ctrl_waist_go_home(self):
         logger_mp.info("[G1_29_ArmController] Moving waist to home position...")
         tolerance = 0.015  # Tolerance threshold for joint angles to determine "close to zero"
@@ -423,29 +421,7 @@ class G1_29_JointArmWaistIndex(IntEnum):
     # Waist
     kWaistYaw = 12
     kWaistPitch = 13
-class G1_D_JointIndex(IntEnum):
-    # Waist
-    kWaistYaw = 0
-    kWaistRoll = 1
-    kWaistPitch = 2
 
-    # Left arm
-    kLeftShoulderPitch = 3
-    kLeftShoulderRoll = 4
-    kLeftShoulderYaw = 5
-    kLeftElbow = 6
-    kLeftWristRoll = 7
-    kLeftWristPitch = 8
-    kLeftWristyaw = 9
-
-    # Right arm
-    kRightShoulderPitch = 10
-    kRightShoulderRoll = 11
-    kRightShoulderYaw = 12
-    kRightElbow = 13
-    kRightWristRoll = 14
-    kRightWristPitch = 15
-    kRightWristYaw = 16
     
 class G1_29_JointIndex(IntEnum):
     # Left leg

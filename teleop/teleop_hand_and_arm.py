@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire_ftp', 'inspire_dfx', 'brainco'], help='Select end effector controller')
     
     # mobile base, elevation and waist control
-    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','legs'], default='legs', help='Select lower body type')
+    parser.add_argument('--base-type', type=str, choices=['mobile_lift', 'lift','legs'], default='mobile_lift', help='Select lower body type')
     parser.add_argument('--use-waist', action = 'store_false', help = 'Enable waist control')
 
     # mode flags

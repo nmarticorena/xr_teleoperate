@@ -110,7 +110,7 @@ class ControlDataMapper:
         else:
             self.height_speed_value = 0
         if rbutton_A or rbutton_B:
-            waist_pitch_pos = self._update_waist_picth_button(rbutton_A,rbutton_B,max_velocity=10.0,min_position=-0.02,max_position=2.3)
+            waist_pitch_pos = self._update_waist_picth_button(rbutton_A,rbutton_B,max_velocity=8.0,min_position=-0.02,max_position=2.3)
         else:
             waist_pitch_pos = self.waist_pitch_pos
         return {
@@ -170,7 +170,7 @@ class ControlDataMapper:
             delta_q = delta_t * ((max_position - min_position) / max_velocity)
 
         
-        elif rbutton_B and self.waist_pitch_pos > min_position:  # 使用elif避免同时按下
+        elif rbutton_B and self.waist_pitch_pos > min_position:  
             delta_q = -delta_t * ((max_position - min_position) / max_velocity)
         
         if delta_q != 0:
