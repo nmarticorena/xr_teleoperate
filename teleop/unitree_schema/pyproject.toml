@@ -1,0 +1,30 @@
+[project]
+name = "unitree_schema"
+version = "2.0.0b"
+description = "Unitree Schema: Data schemas for Unitree Embodied Intelligence."
+authors = [
+    { name = "silencht", email = "silencht@qq.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.8,<3.11"
+dependencies = [
+    "logging_mp",
+    "numpy",
+    "msgspec==0.20.0",
+    "opencv-python",
+    "rerun-sdk==0.20.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/unitreerobotics/unitree_schema"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

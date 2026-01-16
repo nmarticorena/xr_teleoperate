@@ -136,7 +136,7 @@ class RerunLogger:
         rr.send_blueprint(grid)
 
 
-    def log_item_data(self, item_data: dict):
+    def log_step_data(self, item_data: dict):
         rr.set_time_sequence("idx", item_data.get('idx', 0))
 
         # Log states
@@ -182,7 +182,7 @@ class RerunLogger:
 
     def log_episode_data(self, episode_data: list):
         for item_data in episode_data:
-            self.log_item_data(item_data)
+            self.log_step_data(item_data)
 
 
 if __name__ == "__main__":
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         logger_mp.info("Starting online visualization with fixed idx size...")
         online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit='50MB')
         for item_data in episode_data8:
-            online_logger.log_item_data(item_data)
+            online_logger.log_step_data(item_data)
             time.sleep(0.033) # 30hz
         logger_mp.info("Online visualization completed.")
 
@@ -243,6 +243,6 @@ if __name__ == "__main__":
     #     logger_mp.info("Starting offline visualization with fixed idx size...")
     #     online_logger = RerunLogger(prefix="offline/", IdxRangeBoundary = 60)
     #     for item_data in episode_data8:
-    #         online_logger.log_item_data(item_data)
+    #         online_logger.log_step_data(item_data)
     #         time.sleep(0.033) # 30hz
     #     logger_mp.info("Offline visualization completed.")

@@ -105,7 +105,7 @@ class G1_29_ArmController:
         self.msg.mode_pr = 0
         self.msg.mode_machine = self.get_mode_machine()
 
-        self.all_motor_q = self.get_current_motor_q()
+        self.all_motor_q = self.get_current_body_q()
         logger_mp.debug(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.debug(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
         logger_mp.info("Lock all joints except two arms...")
@@ -201,9 +201,29 @@ class G1_29_ArmController:
         '''Return current dds mode machine.'''
         return self.lowstate_subscriber.Read().mode_machine
     
-    def get_current_motor_q(self):
+    def get_current_body_q(self):
         '''Return current state q of all body motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointIndex])
+    
+    def get_current_left_leg_q(self):
+        '''Return current state q of the left leg motors.'''
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointLeftLegIndex])
+
+    def get_current_right_leg_q(self):
+        '''Return current state q of the right leg motors.'''
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointRightLegIndex])
+    
+    def get_current_waist_q(self):
+        '''Return current state q of the waist motors.'''
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointWaistIndex])
+    
+    def get_current_left_arm_q(self):
+        '''Return current state q of the left arm motors.'''
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointLeftArmIndex])
+
+    def get_current_right_arm_q(self):
+        '''Return current state q of the right arm motors.'''
+        return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_29_JointRightArmIndex])
     
     def get_current_dual_arm_q(self):
         '''Return current state q of the left and right arm motors.'''
@@ -271,6 +291,45 @@ class G1_29_ArmController:
             G1_29_JointIndex.kRightWristYaw.value,
         ]
         return motor_index.value in wrist_motors
+
+class G1_29_JointLeftLegIndex(IntEnum):
+    kLeftHipPitch = 0
+    kLeftHipRoll = 1
+    kLeftHipYaw = 2
+    kLeftKnee = 3
+    kLeftAnklePitch = 4
+    kLeftAnkleRoll = 5
+
+class G1_29_JointRightLegIndex(IntEnum):
+    kRightHipPitch = 6
+    kRightHipRoll = 7
+    kRightHipYaw = 8
+    kRightKnee = 9
+    kRightAnklePitch = 10
+    kRightAnkleRoll = 11
+
+class G1_29_JointWaistIndex(IntEnum):
+    kWaistYaw = 12
+    kWaistRoll = 13
+    kWaistPitch = 14
+
+class G1_29_JointLeftArmIndex(IntEnum):
+    kLeftShoulderPitch = 15
+    kLeftShoulderRoll = 16
+    kLeftShoulderYaw = 17
+    kLeftElbow = 18
+    kLeftWristRoll = 19
+    kLeftWristPitch = 20
+    kLeftWristyaw = 21
+
+class G1_29_JointRightArmIndex(IntEnum):
+    kRightShoulderPitch = 22
+    kRightShoulderRoll = 23
+    kRightShoulderYaw = 24
+    kRightElbow = 25
+    kRightWristRoll = 26
+    kRightWristPitch = 27
+    kRightWristYaw = 28
 
 class G1_29_JointArmIndex(IntEnum):
     # Left arm
@@ -388,7 +447,7 @@ class G1_23_ArmController:
         self.msg.mode_pr = 0
         self.msg.mode_machine = self.get_mode_machine()
 
-        self.all_motor_q = self.get_current_motor_q()
+        self.all_motor_q = self.get_current_body_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
         logger_mp.info("Lock all joints except two arms...")
@@ -484,7 +543,7 @@ class G1_23_ArmController:
         '''Return current dds mode machine.'''
         return self.lowstate_subscriber.Read().mode_machine
     
-    def get_current_motor_q(self):
+    def get_current_body_q(self):
         '''Return current state q of all body motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in G1_23_JointIndex])
     
@@ -663,7 +722,7 @@ class H1_2_ArmController:
         self.msg.mode_pr = 0
         self.msg.mode_machine = self.get_mode_machine()
 
-        self.all_motor_q = self.get_current_motor_q()
+        self.all_motor_q = self.get_current_body_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
         logger_mp.info("Lock all joints except two arms...")
@@ -759,7 +818,7 @@ class H1_2_ArmController:
         '''Return current dds mode machine.'''
         return self.lowstate_subscriber.Read().mode_machine
     
-    def get_current_motor_q(self):
+    def get_current_body_q(self):
         '''Return current state q of all body motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in H1_2_JointIndex])
     
@@ -940,7 +999,7 @@ class H1_ArmController:
         self.msg.level_flag = 0xFF
         self.msg.gpio = 0
 
-        self.all_motor_q = self.get_current_motor_q()
+        self.all_motor_q = self.get_current_body_q()
         logger_mp.info(f"Current all body motor state q:\n{self.all_motor_q} \n")
         logger_mp.info(f"Current two arms motor state q:\n{self.get_current_dual_arm_q()}\n")
         logger_mp.info("Lock all joints except two arms...")
@@ -1021,7 +1080,7 @@ class H1_ArmController:
             self.q_target = q_target
             self.tauff_target = tauff_target
     
-    def get_current_motor_q(self):
+    def get_current_body_q(self):
         '''Return current state q of all body motors.'''
         return np.array([self.lowstate_buffer.GetData().motor_state[id].q for id in H1_JointIndex])
     

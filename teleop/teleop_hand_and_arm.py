@@ -1,5 +1,6 @@
 import time
 import argparse
+import numpy as np
 from multiprocessing import Value, Array, Lock
 import threading
 import logging_mp
@@ -17,7 +18,7 @@ from televuer import TeleVuerWrapper
 from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
 from teleimager.image_client import ImageClient
-from teleop.utils.episode_writer import EpisodeWriter
+import unitree_schema as us
 from teleop.utils.ipc import IPC_Server
 from teleop.utils.motion_switcher import MotionSwitcher, LocoClientWrapper
 from sshkeyboard import listen_keyboard, stop_listening
@@ -70,14 +71,38 @@ def get_state() -> dict:
         "RECORD_RUNNING": RECORD_RUNNING,
     }
 
+class FixedRateTimer:
+    def __init__(self, fps: float, busy_wait_ms: float = 0.5):
+        self.period = 1.0 / fps
+        self._next_tick = None
+        self._busy_wait = busy_wait_ms / 1000.0
+
+    def wait(self):
+        now = time.perf_counter()
+
+        if self._next_tick is None:
+            self._next_tick = now + self.period
+            return
+
+        remaining = self._next_tick - now
+
+        if remaining > self._busy_wait:
+            time.sleep(remaining - self._busy_wait)
+
+        while time.perf_counter() < self._next_tick:
+            pass
+
+        self._next_tick += self.period
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # basic control parameters
-    parser.add_argument('--frequency', type = float, default = 30.0, help = 'control and record \'s frequency')
+    parser.add_argument('--frequency', type = float, default = 120.0, help = 'control and record \'s frequency')
     parser.add_argument('--input-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device input tracking source')
     parser.add_argument('--display-mode', type=str, choices=['immersive', 'ego', 'pass-through'], default='immersive', help='Select XR device display mode')
-    parser.add_argument('--arm', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select arm controller')
-    parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire_ftp', 'inspire_dfx', 'brainco'], help='Select end effector controller')
+    parser.add_argument('--body', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select Body')
+    parser.add_argument('--ee', type=str, choices=['dex1', 'dex3', 'inspire_ftp', 'inspire_dfx', 'brainco'], help='Select end effector')
     parser.add_argument('--img-server-ip', type=str, default='192.168.123.164', help='IP address of image server, used by teleimager and televuer')
     parser.add_argument('--network-interface', type=str, default=None, help='Network interface for dds communication, e.g., eth0, wlan0. If None, use default interface.')
     # mode flags
@@ -88,14 +113,14 @@ if __name__ == '__main__':
     parser.add_argument('--affinity', action = 'store_true', help = 'Enable high priority and set CPU affinity mode')
     # record mode and task info
     parser.add_argument('--record', action = 'store_true', help = 'Enable data recording mode')
-    parser.add_argument('--task-dir', type = str, default = './utils/data/', help = 'path to save data')
+    parser.add_argument('--save-path', type = str, default = './data/', help = 'path to save data')
     parser.add_argument('--task-name', type = str, default = 'pick cube', help = 'task file name for recording')
-    parser.add_argument('--task-goal', type = str, default = 'pick up cube.', help = 'task goal for recording at json file')
-    parser.add_argument('--task-desc', type = str, default = 'task description', help = 'task description for recording at json file')
-    parser.add_argument('--task-steps', type = str, default = 'step1: do this; step2: do that;', help = 'task steps for recording at json file')
+    parser.add_argument('--task-goal', type = str, default = 'pick up cube.', help = 'Primary objective of the task (one sentence)')
+    parser.add_argument('--task-desc', type = str, default = 'pick up red cube placed on...', help = 'Detailed task description, instructions, and notes')
 
     args = parser.parse_args()
     logger_mp.info(f"args: {args}")
+    ratetimer = FixedRateTimer(fps=args.frequency)
 
     try:
         # setup dds communication domains id
@@ -119,7 +144,6 @@ if __name__ == '__main__':
         img_client = ImageClient(host=args.img_server_ip)
         camera_config = img_client.get_cam_config()
         logger_mp.debug(f"Camera config: {camera_config}")
-        xr_need_local_img = not (args.display_mode == 'pass-through' or camera_config['head_camera']['enable_webrtc'])
 
         # televuer_wrapper: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
         tv_wrapper = TeleVuerWrapper(use_hand_tracking=args.input_mode == "hand", 
@@ -129,7 +153,6 @@ if __name__ == '__main__':
                                      # https://github.com/unitreerobotics/xr_teleoperate/issues/172
                                      # display_fps=camera_config['head_camera']['fps'] ? args.frequency? 30.0?
                                      display_mode=args.display_mode,
-                                     zmq=camera_config['head_camera']['enable_zmq'],
                                      webrtc=camera_config['head_camera']['enable_webrtc'],
                                      webrtc_url=f"https://{args.img_server_ip}:{camera_config['head_camera']['webrtc_port']}/offer",
                                      )
@@ -144,16 +167,16 @@ if __name__ == '__main__':
             logger_mp.info(f"Enter debug mode: {'Success' if status == 0 else 'Failed'}")
 
         # arm
-        if args.arm == "G1_29":
+        if args.body == "G1_29":
             arm_ik = G1_29_ArmIK()
             arm_ctrl = G1_29_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
-        elif args.arm == "G1_23":
+        elif args.body == "G1_23":
             arm_ik = G1_23_ArmIK()
             arm_ctrl = G1_23_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
-        elif args.arm == "H1_2":
+        elif args.body == "H1_2":
             arm_ik = H1_2_ArmIK()
             arm_ctrl = H1_2_ArmController(motion_mode=args.motion, simulation_mode=args.sim)
-        elif args.arm == "H1":
+        elif args.body == "H1":
             arm_ik = H1_ArmIK()
             arm_ctrl = H1_ArmController(simulation_mode=args.sim)
 
@@ -163,44 +186,44 @@ if __name__ == '__main__':
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
             right_hand_pos_array = Array('d', 75, lock = True)     # [input]
             dual_hand_data_lock = Lock()
-            dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
-            dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
+            dual_ee_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
+            dual_ee_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
             hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, 
-                                          dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+                                          dual_ee_state_array, dual_ee_action_array, simulation_mode=args.sim)
         elif args.ee == "dex1":
             from teleop.robot_control.robot_hand_unitree import Dex1_1_Gripper_Controller
             left_gripper_value = Value('d', 0.0, lock=True)        # [input]
             right_gripper_value = Value('d', 0.0, lock=True)       # [input]
             dual_gripper_data_lock = Lock()
-            dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
-            dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
+            dual_ee_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
+            dual_ee_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
             gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, 
-                                                     dual_gripper_state_array, dual_gripper_action_array, simulation_mode=args.sim)
+                                                     dual_ee_state_array, dual_ee_action_array, simulation_mode=args.sim)
         elif args.ee == "inspire_dfx":
             from teleop.robot_control.robot_hand_inspire import Inspire_Controller_DFX
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
             right_hand_pos_array = Array('d', 75, lock = True)     # [input]
             dual_hand_data_lock = Lock()
-            dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
-            dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-            hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+            dual_ee_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
+            dual_ee_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
+            hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_ee_state_array, dual_ee_action_array, simulation_mode=args.sim)
         elif args.ee == "inspire_ftp":
             from teleop.robot_control.robot_hand_inspire import Inspire_Controller_FTP
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
             right_hand_pos_array = Array('d', 75, lock = True)     # [input]
             dual_hand_data_lock = Lock()
-            dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
-            dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-            hand_ctrl = Inspire_Controller_FTP(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+            dual_ee_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
+            dual_ee_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
+            hand_ctrl = Inspire_Controller_FTP(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_ee_state_array, dual_ee_action_array, simulation_mode=args.sim)
         elif args.ee == "brainco":
             from teleop.robot_control.robot_hand_brainco import Brainco_Controller
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
             right_hand_pos_array = Array('d', 75, lock = True)     # [input]
             dual_hand_data_lock = Lock()
-            dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
-            dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
+            dual_ee_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
+            dual_ee_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
             hand_ctrl = Brainco_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, 
-                                           dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+                                           dual_ee_state_array, dual_ee_action_array, simulation_mode=args.sim)
         else:
             pass
         
@@ -232,12 +255,34 @@ if __name__ == '__main__':
 
         # record + headless / non-headless mode
         if args.record:
-            recorder = EpisodeWriter(task_dir = os.path.join(args.task_dir, args.task_name),
-                                     task_goal = args.task_goal,
-                                     task_desc = args.task_desc,
-                                     task_steps = args.task_steps,
-                                     frequency = args.frequency, 
-                                     rerun_log = not args.headless)
+            head_img_size = None
+            left_wrist_img_size = None
+            right_wrist_img_size = None
+            if camera_config['head_camera']['enable_zmq']:
+                head_img_size = camera_config['head_camera']['image_shape']
+            if camera_config['left_wrist_camera']['enable_zmq']:
+                left_wrist_img_size = camera_config['left_wrist_camera']['image_shape']
+            if camera_config['right_wrist_camera']['enable_zmq']:
+                right_wrist_img_size = camera_config['right_wrist_camera']['image_shape']
+
+            recorder = us.UnitreeRecorder(save_path=args.save_path,
+                                          task_name=args.task_name,
+                                          task_goal=args.task_goal,
+                                          task_desc=args.task_desc,
+                                          data_freq=args.frequency,
+                                          body=args.body,
+                                          end_effector=args.ee,
+                                          data=us.Data(
+                                            observation=us.Observation(
+                                                color=us.Colors(
+                                                    head_camera=us.Color(shape=(head_img_size)),
+                                                    left_wrist_camera=us.Color(shape=left_wrist_img_size),
+                                                    right_wrist_camera=us.Color(shape=right_wrist_img_size),
+                                                ),
+                                            ),
+                                          ),
+                                          # visualizer
+                                          vis=args.headless)
 
         logger_mp.info("----------------------------------------------------------------")
         logger_mp.info("🟢  Press [r] to start syncing the robot with your movements.")
@@ -250,27 +295,18 @@ if __name__ == '__main__':
         READY = True                  # now ready to (1) enter START state
         while not START and not STOP: # wait for start or stop signal.
             time.sleep(0.033)
-            if camera_config['head_camera']['enable_zmq'] and xr_need_local_img:
-                head_img, _ = img_client.get_head_frame()
-                tv_wrapper.render_to_xr(head_img)
 
         logger_mp.info("---------------------🚀start Tracking🚀-------------------------")
         arm_ctrl.speed_gradual_max()
         # main loop. robot start to follow VR user's motion
         while not STOP:
-            start_time = time.time()
             # get image
-            if camera_config['head_camera']['enable_zmq']:
-                if args.record or xr_need_local_img:
-                    head_img, head_img_fps = img_client.get_head_frame()
-                if xr_need_local_img:
-                    tv_wrapper.render_to_xr(head_img)
-            if camera_config['left_wrist_camera']['enable_zmq']:
-                if args.record:
-                    left_wrist_img, _ = img_client.get_left_wrist_frame()
-            if camera_config['right_wrist_camera']['enable_zmq']:
-                if args.record:
-                    right_wrist_img, _ = img_client.get_right_wrist_frame()
+            if camera_config['head_camera']['enable_zmq'] and args.record:
+                head_frame = img_client.get_head_frame()
+            if camera_config['left_wrist_camera']['enable_zmq'] and args.record:
+                left_wrist_frame = img_client.get_left_wrist_frame()
+            if camera_config['right_wrist_camera']['enable_zmq'] and args.record:
+                right_wrist_frame = img_client.get_right_wrist_frame()
 
             # record mode
             if args.record and RECORD_TOGGLE:
@@ -307,6 +343,7 @@ if __name__ == '__main__':
                 pass
             
             # high level control
+            loco_wrapper_vx, loco_wrapper_vy, loco_wrapper_vyaw = 0.0, 0.0, 0.0
             if args.input_mode == "controller" and args.motion:
                 # quit teleoperate
                 if tele_data.right_ctrl_aButton:
@@ -316,20 +353,24 @@ if __name__ == '__main__':
                 if tele_data.left_ctrl_thumbstick and tele_data.right_ctrl_thumbstick:
                     loco_wrapper.Damp()
                 # https://github.com/unitreerobotics/xr_teleoperate/issues/135, control, limit velocity to within 0.3
-                loco_wrapper.Move(-tele_data.left_ctrl_thumbstickValue[1] * 0.3,
-                                  -tele_data.left_ctrl_thumbstickValue[0] * 0.3,
-                                  -tele_data.right_ctrl_thumbstickValue[0]* 0.3)
+                loco_wrapper_vx   = -tele_data.left_ctrl_thumbstickValue[1] * 0.3
+                loco_wrapper_vy   = -tele_data.left_ctrl_thumbstickValue[0] * 0.3
+                loco_wrapper_vyaw = -tele_data.right_ctrl_thumbstickValue[0] * 0.3
+                loco_wrapper.Move(loco_wrapper_vx, loco_wrapper_vy, loco_wrapper_vyaw)
 
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
-            current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
+            if args.record:
+                current_waist_q   = arm_ctrl.get_current_waist_q()
+                current_left_leg_q  = arm_ctrl.get_current_left_leg_q()
+                current_right_leg_q = arm_ctrl.get_current_right_leg_q()
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
-            sol_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_wrist_pose, tele_data.right_wrist_pose, current_lr_arm_q, current_lr_arm_dq)
+            target_lr_arm_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_wrist_pose, tele_data.right_wrist_pose, current_lr_arm_q)
             time_ik_end = time.time()
             logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
-            arm_ctrl.ctrl_dual_arm(sol_q, sol_tauff)
+            arm_ctrl.ctrl_dual_arm(target_lr_arm_q, sol_tauff)
 
             # record data
             if args.record:
@@ -337,146 +378,92 @@ if __name__ == '__main__':
                 # dex hand or gripper
                 if args.ee == "dex3" and args.input_mode == "hand":
                     with dual_hand_data_lock:
-                        left_ee_state = dual_hand_state_array[:7]
-                        right_ee_state = dual_hand_state_array[-7:]
-                        left_hand_action = dual_hand_action_array[:7]
-                        right_hand_action = dual_hand_action_array[-7:]
-                        current_body_state = []
-                        current_body_action = []
+                        current_left_ee_q = np.atleast_1d(dual_ee_state_array[:7])
+                        current_right_ee_q = np.atleast_1d(dual_ee_state_array[-7:])
+                        target_left_ee_q = np.atleast_1d(dual_ee_action_array[:7])
+                        target_right_ee_q =  np.atleast_1d(dual_ee_action_array[-7:])
                 elif args.ee == "dex1" and args.input_mode == "hand":
                     with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[0]]
-                        right_ee_state = [dual_gripper_state_array[1]]
-                        left_hand_action = [dual_gripper_action_array[0]]
-                        right_hand_action = [dual_gripper_action_array[1]]
-                        current_body_state = []
-                        current_body_action = []
+                        current_left_ee_q = np.atleast_1d(dual_ee_state_array[0])
+                        current_right_ee_q = np.atleast_1d(dual_ee_state_array[1])
+                        target_left_ee_q = np.atleast_1d(dual_ee_action_array[0])
+                        target_right_ee_q = np.atleast_1d(dual_ee_action_array[1])
                 elif args.ee == "dex1" and args.input_mode == "controller":
                     with dual_gripper_data_lock:
-                        left_ee_state = [dual_gripper_state_array[0]]
-                        right_ee_state = [dual_gripper_state_array[1]]
-                        left_hand_action = [dual_gripper_action_array[0]]
-                        right_hand_action = [dual_gripper_action_array[1]]
-                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
-                        current_body_action = [-tele_data.left_ctrl_thumbstickValue[1]  * 0.3,
-                                               -tele_data.left_ctrl_thumbstickValue[0]  * 0.3,
-                                               -tele_data.right_ctrl_thumbstickValue[0] * 0.3]
+                        current_left_ee_q = np.atleast_1d(dual_ee_state_array[0])
+                        current_right_ee_q = np.atleast_1d(dual_ee_state_array[1])
+                        target_left_ee_q = np.atleast_1d(dual_ee_action_array[0])
+                        target_right_ee_q = np.atleast_1d(dual_ee_action_array[1])
                 elif (args.ee == "inspire_dfx" or args.ee == "inspire_ftp" or args.ee == "brainco") and args.input_mode == "hand":
                     with dual_hand_data_lock:
-                        left_ee_state = dual_hand_state_array[:6]
-                        right_ee_state = dual_hand_state_array[-6:]
-                        left_hand_action = dual_hand_action_array[:6]
-                        right_hand_action = dual_hand_action_array[-6:]
-                        current_body_state = []
-                        current_body_action = []
+                        current_left_ee_q = np.atleast_1d(dual_ee_state_array[:6])
+                        current_right_ee_q = np.atleast_1d(dual_ee_state_array[-6:])
+                        target_left_ee_q = np.atleast_1d(dual_ee_action_array[:6])
+                        target_right_ee_q = np.atleast_1d(dual_ee_action_array[-6:])
                 else:
-                    left_ee_state = []
-                    right_ee_state = []
-                    left_hand_action = []
-                    right_hand_action = []
-                    current_body_state = []
-                    current_body_action = []
+                    current_left_ee_q = np.array([])
+                    current_right_ee_q = np.array([])
+                    target_left_ee_q = np.array([])
+                    target_right_ee_q = np.array([])
 
                 # arm state and action
-                left_arm_state  = current_lr_arm_q[:7]
-                right_arm_state = current_lr_arm_q[-7:]
-                left_arm_action = sol_q[:7]
-                right_arm_action = sol_q[-7:]
                 if RECORD_RUNNING:
                     colors = {}
-                    depths = {}
                     if camera_config['head_camera']['binocular']:
-                        if head_img is not None:
-                            colors[f"color_{0}"] = head_img[:, :camera_config['head_camera']['image_shape'][1]//2]
-                            colors[f"color_{1}"] = head_img[:, camera_config['head_camera']['image_shape'][1]//2:]
+                        if head_frame is not None:
+                            colors[f"head_camera"] = head_frame.jpg
                         else:
                             logger_mp.warning("Head image is None!")
-                        if camera_config['left_wrist_camera']['enable_zmq']:
-                            if left_wrist_img is not None:
-                                colors[f"color_{2}"] = left_wrist_img
-                            else:
-                                logger_mp.warning("Left wrist image is None!")
-                        if camera_config['right_wrist_camera']['enable_zmq']:
-                            if right_wrist_img is not None:
-                                colors[f"color_{3}"] = right_wrist_img
-                            else:
-                                logger_mp.warning("Right wrist image is None!")
-                    else:
-                        if head_img is not None:
-                            colors[f"color_{0}"] = head_img
+                    if camera_config['left_wrist_camera']['enable_zmq']:
+                        if left_wrist_frame is not None:
+                            colors[f"left_wrist_camera"] = left_wrist_frame.jpg
                         else:
-                            logger_mp.warning("Head image is None!")
-                        if camera_config['left_wrist_camera']['enable_zmq']:
-                            if left_wrist_img is not None:
-                                colors[f"color_{1}"] = left_wrist_img
-                            else:
-                                logger_mp.warning("Left wrist image is None!")
-                        if camera_config['right_wrist_camera']['enable_zmq']:
-                            if right_wrist_img is not None:
-                                colors[f"color_{2}"] = right_wrist_img
-                            else:
-                                logger_mp.warning("Right wrist image is None!")
-                    states = {
-                        "left_arm": {                                                                    
-                            "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                            "qvel":   [],                          
-                            "torque": [],                        
-                        }, 
-                        "right_arm": {                                                                    
-                            "qpos":   right_arm_state.tolist(),       
-                            "qvel":   [],                          
-                            "torque": [],                         
-                        },                        
-                        "left_ee": {                                                                    
-                            "qpos":   left_ee_state,           
-                            "qvel":   [],                           
-                            "torque": [],                          
-                        }, 
-                        "right_ee": {                                                                    
-                            "qpos":   right_ee_state,       
-                            "qvel":   [],                           
-                            "torque": [],  
-                        }, 
-                        "body": {
-                            "qpos": current_body_state,
-                        }, 
-                    }
-                    actions = {
-                        "left_arm": {                                   
-                            "qpos":   left_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],      
-                        }, 
-                        "right_arm": {                                   
-                            "qpos":   right_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],       
-                        },                         
-                        "left_ee": {                                   
-                            "qpos":   left_hand_action,       
-                            "qvel":   [],       
-                            "torque": [],       
-                        }, 
-                        "right_ee": {                                   
-                            "qpos":   right_hand_action,       
-                            "qvel":   [],       
-                            "torque": [], 
-                        }, 
-                        "body": {
-                            "qpos": current_body_action,
-                        }, 
-                    }
-                    if args.sim:
-                        sim_state = sim_state_subscriber.read_data()            
-                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
-                    else:
-                        recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
+                            logger_mp.warning("Left wrist image is None!")
+                    if camera_config['right_wrist_camera']['enable_zmq']:
+                        if right_wrist_frame is not None:
+                            colors[f"right_wrist_camera"] = right_wrist_frame.jpg
+                        else:
+                            logger_mp.warning("Right wrist image is None!")
 
-            current_time = time.time()
-            time_elapsed = current_time - start_time
-            sleep_time = max(0, (1 / args.frequency) - time_elapsed)
-            time.sleep(sleep_time)
-            logger_mp.debug(f"main process sleep: {sleep_time}")
+                    if args.sim:
+                        recorder.add_frame(
+                                    #
+                                    simulation_state=sim_state_subscriber.read_data(),
+                        )
+                    else:
+                        recorder.add_frame(
+                                data=us.Data(
+                                    observation=us.Observation(
+                                        body=us.Body(
+                                            left_arm=us.Joint(qpos=current_lr_arm_q[:7]),
+                                            right_arm=us.Joint(qpos=current_lr_arm_q[-7:]),
+                                            waist=us.Joint(qpos=current_waist_q),
+                                            left_leg=us.Joint(qpos=current_left_leg_q),
+                                            right_leg=us.Joint(qpos=current_right_leg_q),
+                                        ),
+                                        color=us.Colors(
+                                            head_camera=us.Color(raw=colors[f"head_camera"], format="jpg"),
+                                            left_wrist_camera=us.Color(raw=colors[f"left_wrist_camera"], format="jpg"),
+                                            right_wrist_camera=us.Color(raw=colors[f"right_wrist_camera"], format="jpg"),
+                                        ),
+                                        end_effector=us.EndEffector(
+                                            left_ee=us.Joint(qpos=current_left_ee_q),
+                                            right_ee=us.Joint(qpos=current_right_ee_q),
+                                        ),
+                                    ),
+                                    action=us.Action(
+                                        body=us.Body(
+                                            left_arm=us.Joint(qpos=target_lr_arm_q[:7]),
+                                            right_arm=us.Joint(qpos=target_lr_arm_q[-7:]),
+                                        ),
+                                        end_effector=us.EndEffector(
+                                            left_ee=us.Joint(qpos=target_left_ee_q),
+                                            right_ee=us.Joint(qpos=target_right_ee_q),
+                                        ),
+                                    ),
+                                )
+                        )
+            ratetimer.wait()
 
     except KeyboardInterrupt:
         logger_mp.info("⛔ KeyboardInterrupt, exiting program...")
@@ -523,7 +510,7 @@ if __name__ == '__main__':
             logger_mp.error(f"Failed to stop sim state subscriber: {e}")
         
         try:
-            if args.record:
+            if args.record and recorder is not None:
                 recorder.close()
         except Exception as e:
             logger_mp.error(f"Failed to close recorder: {e}")
