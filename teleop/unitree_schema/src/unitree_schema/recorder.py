@@ -88,14 +88,15 @@ class UnitreeRecorder():
             logger_mp.info(f"==> There are existing {len(existing_ids)} episodes. Next episode id: {self.episode_id + 1}")
 
         # Initialize frame queue and worker thread
-        self.is_available = True  # Indicates whether the UnitreeRecorder is available for new operations
-        self.stop_worker = False  # Flag to stop the worker thread
-        self.need_save = False    # Flag to indicate when save_episode is triggered
-        self.frame_queue = Queue(maxsize=int(data_freq * 10))
-        self.worker_thread = Thread(target=self._process_frame_queue)
+        self.is_available: bool = True  # Indicates whether the UnitreeRecorder is available for new operations
+        self.stop_worker: bool = False  # Flag to stop the worker thread
+        self.need_save: bool = False    # Flag to indicate when save_episode is triggered
+        self.frame_queue: Queue[Frame] = Queue(maxsize=int(data_freq * 10))
+        self.worker_thread: Thread = Thread(target=self._process_frame_queue, daemon=True)
         self.worker_thread.start()
-        self.fps_monitor = SimpleFPSMonitor(window_size=int(data_freq * 0.3))
 
+        if self.log:
+            self.fps_monitor = SimpleFPSMonitor(window_size=int(data_freq * 0.3))
         if self.vis:
             logger_mp.info("==> ⏳ RerunLogger initializing...")
             self.rerun_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit = "300MB")
@@ -125,22 +126,26 @@ class UnitreeRecorder():
         self.episode_path = os.path.join(self.task_data_path, f"episode_{self.episode_id:06d}")
         os.makedirs(self.episode_path, exist_ok=True)
         self.data_jsonl_path = os.path.join(self.episode_path, 'data.jsonl')
+        self.data_jsonl_wrtier = open(self.data_jsonl_path, "wb")
         logger_mp.info(f"==> New episode created: {self.episode_path}")
-        self.fps_monitor.reset()
 
+        if self.log:
+            self.fps_monitor.reset()
         if self.vis:
             self.online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit="300MB")
         return True  # Return True if the episode is successfully created
     
     def add_frame(self, data: Data):
         self.frame_id += 1
-        self.fps_monitor.tick()
-        logger_mp.info(f"==> episode_id:{self.episode_id}  step_id:{self.frame_id}" 
-                       + (f" fps:{self.fps_monitor.fps:.2f}" if self.fps_monitor.fps > 0 else " fps: calculating..."))
         try:
             self.frame_queue.put_nowait(Frame(id=self.frame_id, data=data))
         except Full:
             logger_mp.warning("==> ⚠️ Frame queue is full. Dropping frame.")
+
+        if self.log:
+            self.fps_monitor.tick()
+            logger_mp.info(f"==> episode_id:{self.episode_id}  step_id:{self.frame_id}" 
+                        + (f" fps:{self.fps_monitor.fps:.2f}" if self.fps_monitor.fps > 0 else " fps: calculating..."))
 
     def save_episode(self):
         """
@@ -160,13 +165,16 @@ class UnitreeRecorder():
             time.sleep(0.01)
         self.stop_worker = True
         self.worker_thread.join()
+        Frame.close()
 
     def _process_frame_queue(self):
         while not self.stop_worker or not self.frame_queue.empty():
             try:
                 new_frame = self.frame_queue.get(timeout=0.1)
                 try:
-                    self._process_frame(new_frame)
+                    new_frame.write(self.episode_path, self.data_jsonl_wrtier)
+                    if self.vis:
+                        self.rerun_logger.log_step_data(new_frame)
                 except Exception as e:
                     logger_mp.warning(f"==> ⚠️  {e}")
                 finally:
@@ -175,17 +183,17 @@ class UnitreeRecorder():
                 if self.need_save:
                     self._save_episode()
 
-    def _process_frame(self, frame_data: Frame):
-        frame_data.write(self.episode_path, self.data_jsonl_path)
-        if self.vis:
-            self.rerun_logger.log_step_data(frame_data)
-
     def _save_episode(self):
         """
         Save the episode data to a JSON file.
         """
-
         self.need_save = False     # Reset the save flag
+        if self.data_jsonl_wrtier:
+            self.data_jsonl_wrtier.flush()
+            os.fsync(self.data_jsonl_wrtier.fileno())
+            self.data_jsonl_wrtier.close()
+            self.data_jsonl_wrtier = None
+        Frame.wait_write_complete()
         self.is_available = True   # Mark the class as available after saving
         logger_mp.info(f"==> Episode saved successfully to {self.data_jsonl_path}.")
 

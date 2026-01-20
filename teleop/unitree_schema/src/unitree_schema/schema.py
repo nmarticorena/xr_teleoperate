@@ -2,8 +2,12 @@ import numpy as np
 import hashlib
 import msgspec
 from msgspec.structs import replace
-from typing import Optional, Union, Any, Annotated, Literal
+from typing import Optional, Union, Any, Annotated, Literal, ClassVar, BinaryIO
 import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait
+import logging_mp
+logger_mp = logging_mp.get_logger(__name__)
 
 VERSION = "2.0.0beta"
 AUTHOR = "Unitree Robotics"
@@ -126,17 +130,33 @@ class Image(msgspec.Struct, omit_defaults=True):
     shape: Annotated[Optional[list[int]], msgspec.Meta(description="Array shape [height, width]")] = None
 
 class Color(Image, Dehydratable):
+    @staticmethod
+    def _dehydrate(path: str, data: bytes):
+        fd = None
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC, 0o644)
+            os.write(fd, memoryview(data))
+        except Exception as e:
+            logger_mp.warning(f"Async Write Error [Path: {path}]: {e}")
+        finally:
+            if fd is not None:
+                os.close(fd)
+
     def dehydrate(self, storage_dir: str, prefix: str) -> "Image":
         if self.raw is None: return replace(self, raw=None, format=None, path=None)
         path = os.path.join(storage_dir, f"{prefix}.{self.format}")
-        with open(path, "wb") as f: f.write(self.raw)
+        Frame._submit_dehydrate_pool(self._dehydrate, path, self.raw)
         return replace(self, raw=None, format=None, path=path)
 
 class Depth(Image, Dehydratable):
+    @staticmethod
+    def _dehydrate(path: str, data: bytes):
+        pass
+        # TODO
     def dehydrate(self, storage_dir: str, prefix: str) -> "Image":
         if self.raw is None: return replace(self, raw=None, format=None, path=None)
         path = os.path.join(storage_dir, f"{prefix}.{self.format}")
-        with open(path, "wb") as f: f.write(self.raw)
+        Frame._submit_dehydrate_pool(self._dehydrate, path, self.raw)
         return replace(self, raw=None, format=None, path=path)
 
 class Colors(msgspec.Struct, omit_defaults=True):
@@ -157,10 +177,14 @@ class PointCloud(msgspec.Struct, Dehydratable, omit_defaults=True):
     pose: Annotated[Optional[list[float]], msgspec.Meta(description="Sensor pose (x,y,z,qw,qx,qy,qz)")] = None
     frame: Annotated[Optional[str], msgspec.Meta(description="Reference frame")] = None
 
+    @staticmethod
+    def _dehydrate(path: str, data: bytes):
+        pass
+        # TODO
     def dehydrate(self, storage_dir: str, prefix: str) -> "PointCloud":
         if self.raw is None: return self
         path = os.path.join(storage_dir, f"{prefix}.{self.format}")
-        # TODO
+        Frame._submit_dehydrate_pool(self._dehydrate, path, self.raw)
         return replace(self, raw=None, format=None, path=path)
 
 # audio
@@ -172,10 +196,14 @@ class Audio(msgspec.Struct, Dehydratable, omit_defaults=True):
     channels: Optional[int] = None
     bits: Optional[int] = None
 
+    @staticmethod
+    def _dehydrate(path: str, data: bytes):
+        pass
+        # TODO
     def dehydrate(self, storage_dir: str, prefix: str) -> "Audio":
         if self.raw is None: return self
         path = os.path.join(storage_dir, f"{prefix}.{self.format}")
-        # TODO
+        Frame._submit_dehydrate_pool(self._dehydrate, path, self.raw)
         return replace(self, raw=None, format=None, path=path)
 
 # chassis and odometry
@@ -239,36 +267,30 @@ class Data(msgspec.Struct, omit_defaults=True):
 class Frame(msgspec.Struct, omit_defaults=True):
     id: Optional[Annotated[int, msgspec.Meta(description="Frame index", ge=0)]] = None
     data: Optional[Data] = None
+    # utils
+    _ENCODER: ClassVar[msgspec.json.Encoder] = msgspec.json.Encoder(enc_hook=enc_hook)
+    _DEHYDRATE_MAP: ClassVar[dict[type, tuple[str, ...]]] = {}
+    _DEHYDRATE_POOL: ClassVar[ThreadPoolExecutor] = ThreadPoolExecutor(max_workers=8, thread_name_prefix="DehydrateIO")
+    _DEHYDRATE_FUTURES: ClassVar[set] = set()
 
-    def write(self, episode_dir: str, jsonl_path: str):
-        dehydrated_frame = self.dehydrate(episode_dir)
-        with open(jsonl_path, "ab") as f:
-            f.write(msgspec.json.encode(dehydrated_frame, enc_hook=enc_hook) + b"\n")
+    def write(self, episode_dir: str, jsonl_writer: BinaryIO):
+        dehydrated_frame = self._dehydrate(episode_dir)
+        jsonl_writer.write(Frame._ENCODER.encode(dehydrated_frame) + b"\n")
 
-    def dehydrate(self, episode_path: str) -> "Frame":
-        if self.data is None: return self 
-        if self.id == 0:
-            Frame.make_dehydratable_dirs(self.data, episode_path)
-            Frame.validate(self)
-        new_data = self._recursive_dehydrate(self.data, "data", episode_path)
-        return replace(self, data=new_data)
-    
-    @staticmethod
-    def make_dehydratable_dirs(obj: Any, episode_path: str):
-        if isinstance(obj, Dehydratable):
-            os.makedirs(os.path.join(episode_path, type(obj).__name__.lower()), exist_ok=True)
-            return
-        if hasattr(obj, "__struct_fields__"):
-            for field in msgspec.structs.fields(obj):
-                sub_obj = getattr(obj, field.name)
-                if sub_obj is not None:
-                    Frame.make_dehydratable_dirs(sub_obj, episode_path)
-        elif isinstance(obj, (list, tuple)):
-            for item in obj:
-                Frame.make_dehydratable_dirs(item, episode_path)
-        elif isinstance(obj, dict):
-            for val in obj.values():
-                Frame.make_dehydratable_dirs(val, episode_path)
+    def read(self, episode_dir: str, jsonl_reader: BinaryIO) -> "Frame":
+        raw = jsonl_reader.read()
+        frame = msgspec.json.decode(raw, type=Frame)
+        # TODO: hydrate
+
+    @classmethod
+    def wait_write_complete(cls):
+        if cls._DEHYDRATE_FUTURES:
+            wait(list(cls._DEHYDRATE_FUTURES))
+            cls._DEHYDRATE_FUTURES.clear()
+
+    @classmethod
+    def close(cls):
+        cls._DEHYDRATE_POOL.shutdown(wait=True, cancel_futures=False)
 
     @staticmethod
     def validate(obj: "Frame") -> "Frame":
@@ -276,36 +298,97 @@ class Frame(msgspec.Struct, omit_defaults=True):
             return msgspec.convert(msgspec.to_builtins(obj, enc_hook=enc_hook), Frame)
         except msgspec.ValidationError as e:
             raise ValueError(f"Validation error for Frame: {e}") from e
+        
+    @classmethod
+    def build_dehydrate_map(cls) -> bool:
+        return cls._scan_for_dehydrate(Data)
+    
+    @staticmethod
+    def make_dehydrate_dirs(obj: Any, episode_path: str):
+        if obj is None: return
+        if isinstance(obj, Dehydratable):
+            os.makedirs(os.path.join(episode_path, type(obj).__name__.lower()), exist_ok=True)
+            return
 
+        obj_type = type(obj)
+        active_fields = Frame._DEHYDRATE_MAP.get(obj_type)
+        if active_fields:
+            for name in active_fields:
+                sub_obj = getattr(obj, name)
+                Frame.make_dehydrate_dirs(sub_obj, episode_path)
+
+    @classmethod
+    def _submit_dehydrate_pool(cls, func, *args):
+        try:
+            future = cls._DEHYDRATE_POOL.submit(func, *args)
+            cls._DEHYDRATE_FUTURES.add(future)
+            future.add_done_callback(lambda f: cls._DEHYDRATE_FUTURES.discard(f))
+        except RuntimeError as e:
+            logger_mp.error(f"Dehydrate Pool Submit Error: {e}")
+
+    def _dehydrate(self, episode_path: str) -> "Frame":
+        if self.data is None: return self 
+        if self.id == 0:
+            Frame.validate(self)
+            Frame.make_dehydrate_dirs(self.data, episode_path)
+            
+        return replace(self, data=self._recursive_dehydrate(self.data, "data", episode_path))
+
+    @classmethod
+    def _scan_for_dehydrate(cls, struct_cls: type) -> bool:
+        if not hasattr(struct_cls, "__struct_fields__"):
+            return False
+            
+        if struct_cls in cls._DEHYDRATE_MAP:
+            return len(cls._DEHYDRATE_MAP[struct_cls]) > 0
+
+        active_fields = []
+        is_type_active = False
+
+        for field in msgspec.structs.fields(struct_cls):
+            f_type = field.type
+            if hasattr(f_type, "__origin__") and f_type.__origin__ is Union:
+                args = [a for a in f_type.__args__ if a is not type(None)]
+                f_type = args[0] if args else f_type
+
+            try:
+                if isinstance(f_type, type) and issubclass(f_type, Dehydratable):
+                    active_fields.append(field.name)
+                    is_type_active = True
+                    continue
+            except TypeError:
+                pass
+
+            if hasattr(f_type, "__struct_fields__"):
+                if cls._scan_for_dehydrate(f_type):
+                    active_fields.append(field.name)
+                    is_type_active = True
+
+        cls._DEHYDRATE_MAP[struct_cls] = tuple(active_fields)
+        return is_type_active
+    
     def _recursive_dehydrate(self, obj: Any, field_name: str, episode_path: str) -> Any:
         if isinstance(obj, Dehydratable):
             dehydratable_obj_dir = os.path.join(episode_path, type(obj).__name__.lower())
             return obj.dehydrate(dehydratable_obj_dir, f"{field_name}_{self.id:06d}" if self.id is not None else field_name)
 
-        if hasattr(obj, "__struct_fields__"):
-            changed_obj = {}
-            for field in msgspec.structs.fields(obj):
-                sub_obj = getattr(obj, field.name)
-                if sub_obj is not None:
-                    new_obj = self._recursive_dehydrate(sub_obj, field.name, episode_path)
-                    if new_obj is not sub_obj:
-                        changed_obj[field.name] = new_obj
-            
-            return replace(obj, **changed_obj) if changed_obj else obj
+
+        obj_type = type(obj)
+        active_fields = self._DEHYDRATE_MAP.get(obj_type)
+        if not active_fields:
+            return obj
+
+        changed_obj = None
+        for name in active_fields:
+            sub_obj = getattr(obj, name)
+            if sub_obj is not None:
+                new_obj = self._recursive_dehydrate(sub_obj, name, episode_path)
+                if new_obj is not sub_obj:
+                    if changed_obj is None: changed_obj = {}
+                    changed_obj[name] = new_obj
         
-        if isinstance(obj, (list, tuple)):
-            new_list = [self._recursive_dehydrate(item, f"{field_name}_{i}", episode_path) for i, item in enumerate(obj)]
-            if any(n is not o for n, o in zip(new_list, obj)):
-                return type(obj)(new_list)
-            return obj
+        return replace(obj, **changed_obj) if changed_obj else obj
 
-        if isinstance(obj, dict):
-            new_dict = {k: self._recursive_dehydrate(v, f"{field_name}_{k}", episode_path) for k, v in obj.items()}
-            if any(new_dict[k] is not obj[k] for k in obj):
-                return new_dict
-            return obj
-
-        return obj
 
 class UnitreeSchema(msgspec.Struct, frozen=True):
     # meta
@@ -337,6 +420,8 @@ class UnitreeSchema(msgspec.Struct, frozen=True):
         d = data or Data()
         std_body = Body(**{k: Joint(name=v) for k, v in BODY_JOINT_NAMES[body].items()})
         std_ee = EndEffector(**{k: EEJoint(name=v) for k, v in EE_JOINT_NAMES[end_effector].items()}) if end_effector else None
+
+        Frame.build_dehydrate_map()
         frame=Frame.validate(
             Frame(
                 data=replace(
@@ -359,7 +444,7 @@ class UnitreeSchema(msgspec.Struct, frozen=True):
         )
     
     def get_fingerprint(self) -> str:
-        return hashlib.md5(msgspec.json.encode(self, enc_hook=enc_hook)).hexdigest()
+        return hashlib.md5(msgspec.json.encode(self, enc_hook=enc_hook, order="deterministic")).hexdigest()
 
     def to_meta_json(self, indent: int = 4) -> bytes:
         spec_dict = self.to_spec()
@@ -371,43 +456,51 @@ class UnitreeSchema(msgspec.Struct, frozen=True):
         return self._unpack(self.__class__, self)
 
     @staticmethod
-    def _unpack(cls_t: Any, inst: Any = None) -> Any:
-        if not hasattr(cls_t, "__struct_fields__"):
-            return inst
+    def _unpack(cls_type: Any, instance: Any = None) -> Any:
+        if not hasattr(cls_type, "__struct_fields__"):
+            return instance
 
         res = {}
-        for f in msgspec.structs.fields(cls_t):
-            val = getattr(inst, f.name) if inst else None
-
+        fields = msgspec.structs.fields(cls_type)
+        
+        for f in fields:
+            ins = getattr(instance, f.name) if instance else None
+            
             desc, unit = None, None
-            if hasattr(f.type, "__metadata__") and f.type.__metadata__:
-                m = f.type.__metadata__[0]
-                if isinstance(m, msgspec.Meta):
-                    desc = m.description
-                    unit = m.extra.get("unit") if m.extra else None
+            metadata = getattr(f.type, "__metadata__", None)
+            if metadata:
+                for m in metadata:
+                    if isinstance(m, msgspec.Meta):
+                        desc = m.description
+                        unit = (m.extra or {}).get("unit")
+                        break
 
-            base_t = f.type
-            if hasattr(f.type, "__origin__") and f.type.__origin__ is Union:
-                args = [a for a in f.type.__args__ if a is not type(None)]
-                base_t = args[0] if args else base_t
-
-            if hasattr(base_t, "__struct_fields__"):
-                unpacked_val = UnitreeSchema._unpack(base_t, val)
-                if desc:
-                    res[f.name] = {"value": unpacked_val, "desc": desc}
+            cls_t = f.type
+            while True:
+                if hasattr(cls_t, "__metadata__"):
+                    cls_t = cls_t.__origin__
+                elif hasattr(cls_t, "__origin__") and cls_t.__origin__ is Union:
+                    cls_t = next((a for a in cls_t.__args__ if a is not type(None)), cls_t)
                 else:
-                    res[f.name] = unpacked_val
+                    break
+
+            if hasattr(cls_t, "__struct_fields__"):
+                child_res = UnitreeSchema._unpack(cls_t, ins)
+                if desc:
+                    res[f.name] = {"value": child_res, "desc": desc}
+                    if unit: res[f.name]["unit"] = unit
+                else:
+                    res[f.name] = child_res
             else:
                 if desc:
-                    item = {"desc": desc}
-                    if val is not None: item["value"] = val
-                    if unit: item["unit"] = unit
-                    res[f.name] = item
-                elif val is not None:
-                    res[f.name] = val
+                    node = {"desc": desc}
+                    if ins is not None: node["value"] = ins
+                    if unit: node["unit"] = unit
+                    res[f.name] = node
+                elif ins is not None:
+                    res[f.name] = ins
                     
         return res
-
 
 __all__ = [
     "VERSION", "AUTHOR", "LICENSE", "BODY_JOINT_NAMES", "EE_JOINT_NAMES",

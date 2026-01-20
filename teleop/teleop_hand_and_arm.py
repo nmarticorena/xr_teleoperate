@@ -72,33 +72,39 @@ def get_state() -> dict:
     }
 
 class FixedRateTimer:
-    def __init__(self, fps: float, busy_wait_ms: float = 0.5):
+    def __init__(self, fps: float, busy_wait_ms: float = 10.0):
         self.period = 1.0 / fps
-        self._next_tick = None
         self._busy_wait = busy_wait_ms / 1000.0
+        self._next_tick = None
 
-    def wait(self):
+    def wait(self) -> bool:
+        """
+        Wait until the next tick to maintain a fixed rate.
+        Returns True if waited successfully, False if the wait was skipped due to loop overtime.
+        """
         now = time.perf_counter()
-
         if self._next_tick is None:
             self._next_tick = now + self.period
-            return
+            return True
 
         remaining = self._next_tick - now
+        if remaining <= 0:
+            self._next_tick = now + self.period
+            return False
 
         if remaining > self._busy_wait:
             time.sleep(remaining - self._busy_wait)
-
         while time.perf_counter() < self._next_tick:
             pass
 
         self._next_tick += self.period
+        return True
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # basic control parameters
-    parser.add_argument('--frequency', type = float, default = 120.0, help = 'control and record \'s frequency')
+    parser.add_argument('--frequency', type = float, default = 30.0, help = 'control and record \'s frequency')
     parser.add_argument('--input-mode', type=str, choices=['hand', 'controller'], default='hand', help='Select XR device input tracking source')
     parser.add_argument('--display-mode', type=str, choices=['immersive', 'ego', 'pass-through'], default='immersive', help='Select XR device display mode')
     parser.add_argument('--body', type=str, choices=['G1_29', 'G1_23', 'H1_2', 'H1'], default='G1_29', help='Select Body')
@@ -282,6 +288,7 @@ if __name__ == '__main__':
                                             ),
                                           ),
                                           # visualizer
+                                          log=True,
                                           vis=args.headless)
 
         logger_mp.info("----------------------------------------------------------------")
@@ -366,10 +373,10 @@ if __name__ == '__main__':
                 current_right_leg_q = arm_ctrl.get_current_right_leg_q()
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
-            time_ik_start = time.time()
+            time_ik_start = time.monotonic_ns()
             target_lr_arm_q, sol_tauff  = arm_ik.solve_ik(tele_data.left_wrist_pose, tele_data.right_wrist_pose, current_lr_arm_q)
-            time_ik_end = time.time()
-            logger_mp.debug(f"ik:\t{round(time_ik_end - time_ik_start, 6)}")
+            time_ik_end = time.monotonic_ns()
+            logger_mp.debug(f"ik:\t{(time_ik_end - time_ik_start)/1e6:.2f} ms")
             arm_ctrl.ctrl_dual_arm(target_lr_arm_q, sol_tauff)
 
             # record data
@@ -463,7 +470,8 @@ if __name__ == '__main__':
                                     ),
                                 )
                         )
-            ratetimer.wait()
+            if not ratetimer.wait():
+                logger_mp.warning("Main loop overtime detected!")
 
     except KeyboardInterrupt:
         logger_mp.info("⛔ KeyboardInterrupt, exiting program...")
