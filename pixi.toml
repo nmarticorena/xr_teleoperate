@@ -1,0 +1,38 @@
+[workspace]
+authors = ["nmarticorena <nicolas.marticorena.vidal@gmail.com>"]
+channels = ["conda-forge"]
+name = "xr_teleoperate"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+set_quest = {cmd = "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem"}
+teleop = {cmd = "python teleop_hand_and_arm.py --input-mode=hand --ee=inspire_dfx --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record" , cwd = "teleop"}
+
+[system-requirements]
+cuda = "12.6"
+
+[dependencies]
+cuda = "12.6.*"
+python = "==3.10"
+pytorch = {build = "cuda126*"}
+pinocchio = ">=3.1.0"
+numpy = "2.*"
+aiohttp = "==3.10.5"
+aiohttp-cors = ">=0.8.1,<0.9"
+meshcat-python = ">=0.3.2,<0.4"
+matplotlib = ">=3.10.8,<4"
+rerun-sdk = "0.26.*"
+ipython = ">=8.37.0,<9"
+pdbpp = ">=0.12.0.post1,<0.13"
+
+[pypi-dependencies]
+teleimager = {path = "teleop/teleimager", editable = true}
+televuer = {path = "teleop/televuer", editable = true}
+unitree_sdk2py = {path = "unitree_sdk2_python", editable = true }
+vuer ={version =  "==0.0.60", extras = ["all"]}
+inspire_sdkpy = {path = "inspire_hand_ws/inspire_hand_sdk", editable = true}
+# vuer = {git = "https://github.com/vuer-ai/vuer.git", rev = "v0.0.60"}
+params-proto = "==2.13.2"
+sshkeyboard = ">=2.3.1, <3"
+dex-retargeting = {path = "dex-retargeting", editable = true}

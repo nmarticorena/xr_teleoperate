@@ -22,4 +22,6 @@ __MACOSX/
 teleop/data/
 episode_0*
 .vscode/
-*.pkl
+*.pkl# pixi environments
+.pixi/*
+!.pixi/config.toml
