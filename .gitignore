@@ -1,3 +1,4 @@
+*.rrd
 .idea/
 __MACOSX/
 .DS_Store
