@@ -38,7 +38,7 @@ class Inspire_Controller_DFX:
         self.HandState_subscriber.Init()
 
         # Shared Arrays for hand states
-        self.left_hand_state_array  = Array('d', Inspire_Num_Motors, lock=True)  
+        self.left_hand_state_array  = Array('d', Inspire_Num_Motors, lock=True)
         self.right_hand_state_array = Array('d', Inspire_Num_Motors, lock=True)
 
         # initialize subscribe thread
@@ -47,16 +47,16 @@ class Inspire_Controller_DFX:
         self.subscribe_state_thread.start()
 
         while True:
-            if any(self.right_hand_state_array): # any(self.left_hand_state_array) and 
+            if any(self.right_hand_state_array): # any(self.left_hand_state_array) and
                 break
             time.sleep(0.01)
             logger_mp.warning("[Inspire_Controller_DFX] Waiting to subscribe dds...")
         logger_mp.info("[Inspire_Controller_DFX] Subscribe dds ok.")
 
-        hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
-                                                                          dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
-        hand_control_process.daemon = True
-        hand_control_process.start()
+        # hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
+        #                                                                   dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
+        # hand_control_process.daemon = True
+        # hand_control_process.start()
 
         logger_mp.info("Initialize Inspire_Controller_DFX OK!")
 
@@ -74,14 +74,34 @@ class Inspire_Controller_DFX:
         """
         Set current left, right hand motor state target q
         """
-        for idx, id in enumerate(Inspire_Left_Hand_JointIndex):             
-            self.hand_msg.cmds[id].q = left_q_target[idx]         
-        for idx, id in enumerate(Inspire_Right_Hand_JointIndex):             
-            self.hand_msg.cmds[id].q = right_q_target[idx] 
+        for idx, id in enumerate(Inspire_Left_Hand_JointIndex):
+            self.hand_msg.cmds[id].q = left_q_target[idx]
+        for idx, id in enumerate(Inspire_Right_Hand_JointIndex):
+            self.hand_msg.cmds[id].q = right_q_target[idx]
 
         self.HandCmb_publisher.Write(self.hand_msg)
         # logger_mp.debug("hand ctrl publish ok.")
-    
+    def dummy_hand(self, left_state:float, right_state:float,
+        dual_hand_data_lock = None,dual_hand_state_array = None, dual_hand_action_array = None):
+
+        start_time = time.time()
+
+        left_q_target = np.full(Inspire_Num_Motors, left_state)
+        right_q_target = np.full(Inspire_Num_Motors, right_state)
+        # initialize inspire hand's cmd msg
+        self.hand_msg  = MotorCmds_()
+        self.hand_msg.cmds = [unitree_go_msg_dds__MotorCmd_() for _ in range(len(Inspire_Right_Hand_JointIndex) + len(Inspire_Left_Hand_JointIndex))]
+
+        for idx, id in enumerate(Inspire_Left_Hand_JointIndex):
+            self.hand_msg.cmds[id].q = left_q_target
+        for idx, id in enumerate(Inspire_Right_Hand_JointIndex):
+            self.hand_msg.cmds[id].q = right_q_target
+        self.ctrl_dual_hand(left_q_target, right_q_target)
+        current_time = time.time()
+        time_elapsed = current_time - start_time
+        sleep_time = max(0, (1 / self.fps) - time_elapsed)
+        time.sleep(sleep_time)
+
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
         self.running = True
@@ -139,7 +159,7 @@ class Inspire_Controller_DFX:
                             right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
 
                 # get dual hand action
-                action_data = np.concatenate((left_q_target, right_q_target))    
+                action_data = np.concatenate((left_q_target, right_q_target))
                 if dual_hand_state_array and dual_hand_action_array:
                     with dual_hand_data_lock:
                         dual_hand_state_array[:] = state_data
@@ -262,6 +282,19 @@ class Inspire_Controller_FTP:
             logger_mp.info(f"[Inspire_Controller_FTP] Publish cmd L={left_angle_cmd_scaled} R={right_angle_cmd_scaled} ")
             self._debug_count += 1
 
+    def dummy_hand(self, left_state:float, right_state:float,
+        left_hand_state_array, right_hand_state_array,
+        dual_hand_data_lock = None,dual_hand_state_array = None, dual_hand_action_array = None):
+
+        start_time = time.time()
+
+        left_q_target = np.full(Inspire_Num_Motors, left_state)
+        right_q_target = np.full(Inspire_Num_Motors, right_state)
+        self._send_hand_command(left_q_target, right_q_target)
+        current_time = time.time()
+        time_elapsed = current_time - start_time
+        sleep_time = max(0, (1 / self.fps) - time_elapsed)
+        time.sleep(sleep_time)
 
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
