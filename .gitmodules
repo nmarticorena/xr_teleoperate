@@ -6,7 +6,7 @@
 	url = https://github.com/silencht/dex-retargeting
 [submodule "teleop/teleimager"]
 	path = teleop/teleimager
-	url = https://github.com/unitreerobotics/teleimager.git
+	url = https://github.com/nmarticorena/teleimager.git
 [submodule "unitree_sdk2_python"]
 	path = unitree_sdk2_python
 	url = https://github.com/unitreerobotics/unitree_sdk2_python.git

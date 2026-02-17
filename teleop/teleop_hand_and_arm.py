@@ -1,9 +1,10 @@
 import time
+import cv2
 import argparse
 from multiprocessing import Value, Array, Lock
 import threading
 import logging_mp
-logging_mp.basic_config(level=logging_mp.INFO)
+logging_mp.basic_config(level=logging_mp.DEBUG)
 logger_mp = logging_mp.get_logger(__name__)
 
 import os 
@@ -119,7 +120,9 @@ if __name__ == '__main__':
         img_client = ImageClient(host=args.img_server_ip)
         camera_config = img_client.get_cam_config()
         logger_mp.debug(f"Camera config: {camera_config}")
-        xr_need_local_img = not (args.display_mode == 'pass-through' or camera_config['head_camera']['enable_webrtc'])
+        logger_mp.debug(f"args config: {args}")
+        xr_need_local_img = not (args.display_mode == 'pass-through') # or camera_config['head_camera']['enable_webrtc'])
+        logger_mp.info(f"need local img: {xr_need_local_img}")
 
         # televuer_wrapper: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
         tv_wrapper = TeleVuerWrapper(use_hand_tracking=args.input_mode == "hand", 
@@ -245,14 +248,17 @@ if __name__ == '__main__':
             logger_mp.info("🟡  Press [s] to START or SAVE recording (toggle cycle).")
         else:
             logger_mp.info("🔵  Recording is DISABLED (run with --record to enable).")
-        logger_mp.info("🔴  Press [q] to stop and exit the program.")
         logger_mp.info("⚠️  IMPORTANT: Please keep your distance and stay safe.")
         READY = True                  # now ready to (1) enter START state
         while not START and not STOP: # wait for start or stop signal.
             time.sleep(0.033)
             if camera_config['head_camera']['enable_zmq'] and xr_need_local_img:
                 head_img, _ = img_client.get_head_frame()
+                # cv2.imshow("main_img",head_img)
+                # cv2.waitKey(1)
                 tv_wrapper.render_to_xr(head_img)
+                
+                tele_data = tv_wrapper.get_tele_data()
 
         logger_mp.info("---------------------🚀start Tracking🚀-------------------------")
         arm_ctrl.speed_gradual_max()
@@ -323,6 +329,7 @@ if __name__ == '__main__':
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
+            
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
@@ -341,7 +348,7 @@ if __name__ == '__main__':
                         right_ee_state = dual_hand_state_array[-7:]
                         left_hand_action = dual_hand_action_array[:7]
                         right_hand_action = dual_hand_action_array[-7:]
-                        current_body_state = []
+                        current_body_state = arm_ctrl.get_current_dual_arm_q().tolist()
                         current_body_action = []
                 elif args.ee == "dex1" and args.input_mode == "hand":
                     with dual_gripper_data_lock:
@@ -349,7 +356,7 @@ if __name__ == '__main__':
                         right_ee_state = [dual_gripper_state_array[1]]
                         left_hand_action = [dual_gripper_action_array[0]]
                         right_hand_action = [dual_gripper_action_array[1]]
-                        current_body_state = []
+                        current_body_state = arm_ctrl.get_current_dual_arm_q().tolist()
                         current_body_action = []
                 elif args.ee == "dex1" and args.input_mode == "controller":
                     with dual_gripper_data_lock:
@@ -367,14 +374,14 @@ if __name__ == '__main__':
                         right_ee_state = dual_hand_state_array[-6:]
                         left_hand_action = dual_hand_action_array[:6]
                         right_hand_action = dual_hand_action_array[-6:]
-                        current_body_state = []
+                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
                         current_body_action = []
                 else:
                     left_ee_state = []
                     right_ee_state = []
                     left_hand_action = []
                     right_hand_action = []
-                    current_body_state = []
+                    current_body_state = arm_ctrl.get_current_motor_q().tolist()
                     current_body_action = []
 
                 # arm state and action

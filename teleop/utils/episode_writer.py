@@ -120,7 +120,8 @@ class EpisodeWriter():
         self.first_item = True   # Flag to handle commas in JSON array
 
         if self.rerun_log:
-            self.online_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit="300MB")
+            self.rerun_logger.start_episode(prefix="online/", episode_name=datetime.datetime.now().strftime("Runtime_%Y%m%d_%H%M%S"))
+            # self.rerun_logger = RerunLogger(prefix="online/")
 
         self.is_available = False  # After the episode is created, the class is marked as unavailable until the episode is successfully saved
         logger_mp.info(f"==> New episode created: {self.episode_dir}")

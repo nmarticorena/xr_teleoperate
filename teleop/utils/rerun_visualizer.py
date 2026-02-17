@@ -1,7 +1,11 @@
+import logging_mp
+    
 import json
 import os
 import time
 from datetime import datetime
+from motion_tools.robot_gui import ReRunRobot, get_blueprint
+import numpy as np
 
 import cv2
 import rerun as rr
@@ -76,17 +80,32 @@ class RerunEpisodeReader:
 
 class RerunLogger:
     def __init__(self, prefix="", IdxRangeBoundary=30, memory_limit=None):
+        self.rec = rr.RecordingStream("robot")
         self.prefix = prefix
         self.IdxRangeBoundary = IdxRangeBoundary
-        rr.init(datetime.now().strftime("Runtime_%Y%m%d_%H%M%S"))
         if memory_limit:
-            rr.spawn(memory_limit=memory_limit, hide_welcome_screen=True)
+            self.rec.spawn(memory_limit=memory_limit, hide_welcome_screen=True)
         else:
-            rr.spawn(hide_welcome_screen=True)
-
+            self.rec.spawn(hide_welcome_screen=True)
+        self.rec.send_recording_name(datetime.now().strftime("Runtime_%Y%m%d_%H%M%S"))
+            
+        self.robot = ReRunRobot.g1(self.rec)
+        self.robot.log_transform_named_frames(
+            "transforms",
+            np.array([0,0,0]),
+            np.array([0,0,0,1]),
+            parent_frame="world",
+            child_frame="pelvis"
+        )
         # Set up blueprint for live visualization
         if self.IdxRangeBoundary:
             self.setup_blueprint()
+            
+        
+    def start_episode(self, prefix: str, episode_name: str):
+        self.prefix = prefix
+        self.rec.send_recording_name(episode_name)
+        self.rec.set_time("idx", duration = 0)
 
     def setup_blueprint(self):
         views = []
@@ -140,10 +159,11 @@ class RerunLogger:
         )
         views.append(rr.blueprint.SelectionPanel(state=rrb.PanelState.Collapsed))
         views.append(rr.blueprint.TimePanel(state=rrb.PanelState.Collapsed))
-        rr.send_blueprint(grid)
+        views.append(get_blueprint())
+        self.rec.send_blueprint(grid)
 
     def log_item_data(self, item_data: dict):
-        rr.set_time_sequence("idx", item_data.get("idx", 0))
+        self.rec.set_time("idx", duration = item_data.get("idx", 0))
 
         # Log states
         states = item_data.get("states", {}) or {}
@@ -151,7 +171,21 @@ class RerunLogger:
             if part != "body" and state_info:
                 values = state_info.get("qpos", [])
                 for idx, val in enumerate(values):
-                    rr.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalars(val))
+                    self.rec.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalars(val))
+            if part == "body":   
+                print(f"Logging body states", state_info)
+                print(f"Logging body states", state_info.get("qpos"))
+                print(f"Logging body states", len(state_info.get("qpos")))
+                
+                
+                self.robot.log(state_info.get("qpos")[:29])
+                self.robot.log_transform_named_frames(
+                    "/transforms",
+                    np.array([0,0,0]),
+                    np.array([0,0,0,1]),
+                    parent_frame="world",
+                    child_frame="pelvis"
+                )
 
         # Log actions
         actions = item_data.get("actions", {}) or {}
@@ -159,7 +193,7 @@ class RerunLogger:
             if part != "body" and action_info:
                 values = action_info.get("qpos", [])
                 for idx, val in enumerate(values):
-                    rr.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalars(val))
+                    self.rec.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalars(val))
 
         # # Log colors (images)
         # colors = item_data.get('colors', {}) or {}
