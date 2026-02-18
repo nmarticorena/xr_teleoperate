@@ -282,10 +282,10 @@ if __name__ == '__main__':
                     head_img, head_img_fps = img_client.get_head_frame()
                 if xr_need_local_img:
                     tv_wrapper.render_to_xr(head_img)
-            if camera_config['left_wrist_camera']['enable_zmq']:
+            if camera_config.get('left_wrist_camera',{}).get('enable_zmq',False):
                 if args.record:
                     left_wrist_img, _ = img_client.get_left_wrist_frame()
-            if camera_config['right_wrist_camera']['enable_zmq']:
+            if camera_config.get('right_wrist_camera',{}).get('enable_zmq',False):
                 if args.record:
                     right_wrist_img, _ = img_client.get_right_wrist_frame()
 
@@ -312,9 +312,9 @@ if __name__ == '__main__':
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
             if (args.ee == "dex3" or args.ee == "inspire_dfx" or args.ee == "inspire_ftp" or args.ee == "brainco") and args.input_mode == "controller":
                 with left_hand_pos_array.get_lock():
-                    left_hand_pos_array.value = tele_data.left_ctrl_triggerValue
+                    left_hand_pos_array.value = tele_data.left_ctrl_triggerValue/10
                 with right_hand_pos_array.get_lock():
-                    right_hand_pos_array.value = tele_data.right_ctrl_triggerValue
+                    right_hand_pos_array.value = tele_data.right_ctrl_triggerValue/10
             elif args.ee == "dex1" and args.input_mode == "controller":
                 print(tele_data)
                 with left_gripper_value.get_lock():
@@ -394,6 +394,14 @@ if __name__ == '__main__':
                         right_hand_action = dual_hand_action_array[-6:]
                         current_body_state = arm_ctrl.get_current_motor_q().tolist()
                         current_body_action = []
+                elif (args.ee == "inspire_dfx" or args.ee == "inspire_ftp" or args.ee == "brainco") and args.input_mode == "controller":
+                    with dual_hand_data_lock:
+                        left_ee_state = dual_hand_state_array[:6]
+                        right_ee_state = dual_hand_state_array[-6:]
+                        left_hand_action = dual_hand_action_array[:6]
+                        right_hand_action = dual_hand_action_array[-6:]
+                        current_body_state = arm_ctrl.get_current_motor_q().tolist()
+                        current_body_action = []
                 else:
                     left_ee_state = []
                     right_ee_state = []
@@ -431,12 +439,12 @@ if __name__ == '__main__':
                             colors[f"color_{0}"] = head_img
                         else:
                             logger_mp.warning("Head image is None!")
-                        if camera_config['left_wrist_camera']['enable_zmq']:
+                        if camera_config.get('left_wrist_camera', {}).get('enable_zmq', False):
                             if left_wrist_img is not None:
                                 colors[f"color_{1}"] = left_wrist_img
                             else:
                                 logger_mp.warning("Left wrist image is None!")
-                        if camera_config['right_wrist_camera']['enable_zmq']:
+                        if camera_config.get('right_wrist_camera', {}).get('enable_zmq', False):
                             if right_wrist_img is not None:
                                 colors[f"color_{2}"] = right_wrist_img
                             else:
