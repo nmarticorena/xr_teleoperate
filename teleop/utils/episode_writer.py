@@ -37,7 +37,7 @@ class EpisodeWriter():
             logger_mp.info("==> RerunLogger initializing...\n")
             self.rerun_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit = "300MB")
             logger_mp.info("==> RerunLogger initializing ok.\n")
-        
+
         self.item_id = -1
         self.episode_id = -1
         if os.path.exists(self.task_dir):
@@ -59,13 +59,13 @@ class EpisodeWriter():
         self.worker_thread.start()
 
         logger_mp.info("==> EpisodeWriter initialized successfully.\n")
-    
+
     def is_ready(self):
         return self.is_available
 
     def data_info(self, version='1.0.0', date=None, author=None):
         self.info = {
-                "version": "1.0.0" if version is None else version, 
+                "version": "1.0.0" if version is None else version,
                 "date": datetime.date.today().strftime('%Y-%m-%d') if date is None else date,
                 "author": "unitree" if author is None else author,
                 "image": {"width":self.image_size[0], "height":self.image_size[1], "fps":self.frequency},
@@ -82,11 +82,11 @@ class EpisodeWriter():
                 "tactile_names": {
                     "left_ee": [],
                     "right_ee": [],
-                }, 
+                },
                 "sim_state": ""
             }
 
- 
+
     def create_episode(self):
         """
         Create a new episode.
@@ -102,7 +102,7 @@ class EpisodeWriter():
         # Reset episode-related data and create necessary directories
         self.item_id = -1
         self.episode_id = self.episode_id + 1
-        
+
         self.episode_dir = os.path.join(self.task_dir, f"episode_{str(self.episode_id).zfill(4)}")
         self.color_dir = os.path.join(self.episode_dir, 'colors')
         self.depth_dir = os.path.join(self.episode_dir, 'depths')
@@ -120,13 +120,13 @@ class EpisodeWriter():
         self.first_item = True   # Flag to handle commas in JSON array
 
         if self.rerun_log:
-            self.rerun_logger.start_episode(prefix="online/", episode_name=datetime.datetime.now().strftime("Runtime_%Y%m%d_%H%M%S"))
+            self.rerun_logger.start_episode("online/", self.episode_id)
             # self.rerun_logger = RerunLogger(prefix="online/")
 
         self.is_available = False  # After the episode is created, the class is marked as unavailable until the episode is successfully saved
         logger_mp.info(f"==> New episode created: {self.episode_dir}")
         return True  # Return True if the episode is successfully created
-        
+
     def add_item(self, colors, depths=None, states=None, actions=None, tactiles=None, audios=None, sim_state=None):
         # Increment the item ID
         self.item_id += 1
@@ -156,7 +156,7 @@ class EpisodeWriter():
                 self.item_data_queue.task_done()
             except Empty:
                 pass
-        
+
             # Check if save_episode was triggered
             if self.need_save and self.item_data_queue.empty():
                 self._save_episode()

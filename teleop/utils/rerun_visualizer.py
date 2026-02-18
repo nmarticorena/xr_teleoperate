@@ -1,11 +1,13 @@
 import logging_mp
-    
+import uuid
+
 import json
 import os
 import time
 from datetime import datetime
 from motion_tools.robot_gui import ReRunRobot, get_blueprint
 import numpy as np
+from pathlib import Path
 
 import cv2
 import rerun as rr
@@ -79,33 +81,47 @@ class RerunEpisodeReader:
 
 
 class RerunLogger:
-    def __init__(self, prefix="", IdxRangeBoundary=30, memory_limit=None):
-        self.rec = rr.RecordingStream("robot")
+    def __init__(self, prefix="", IdxRangeBoundary=30, memory_limit=None, save_dir="rerun_episodes"):
         self.prefix = prefix
         self.IdxRangeBoundary = IdxRangeBoundary
-        if memory_limit:
-            self.rec.spawn(memory_limit=memory_limit, hide_welcome_screen=True)
-        else:
-            self.rec.spawn(hide_welcome_screen=True)
-        self.rec.send_recording_name(datetime.now().strftime("Runtime_%Y%m%d_%H%M%S"))
-            
+        self.memory_limit = memory_limit
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+
+        # These are per-episode
+        self.rec = None
+        self.robot = None
+
+
+    def start_episode(self, prefix: str, episode_id: int, spawn_viewer: bool = True):
+        self.prefix = prefix
+
+        recording_id =  uuid.uuid4()
+        self.rec = rr.RecordingStream(application_id="robot", recording_id=recording_id)
+
+
+        out_path = self.save_dir / f"episode_{episode_id:04d}.rrd"
+        self.rec.save(str(out_path))
+
+        self.rec.send_recording_name(f"Episode {episode_id:04d}")
+
+        if spawn_viewer:
+            self.rec.spawn(hide_welcome_screen=True, memory_limit=self.memory_limit)
+
+        self.rec.set_time("idx", duration=0)
+
         self.robot = ReRunRobot.g1(self.rec)
+
         self.robot.log_transform_named_frames(
             "transforms",
-            np.array([0,0,0]),
-            np.array([0,0,0,1]),
+            np.array([0.0, 0.0, 0.0]),
+            np.array([0.0, 0.0, 0.0, 1.0]),
             parent_frame="world",
-            child_frame="pelvis"
+            child_frame="pelvis",
         )
-        # Set up blueprint for live visualization
+
         if self.IdxRangeBoundary:
             self.setup_blueprint()
-            
-        
-    def start_episode(self, prefix: str, episode_name: str):
-        self.prefix = prefix
-        self.rec.send_recording_name(episode_name)
-        self.rec.set_time("idx", duration = 0)
 
     def setup_blueprint(self):
         views = []
@@ -132,25 +148,6 @@ class RerunLogger:
             )
             views.append(view)
 
-        # image_plot_paths = [
-        #                     f"{self.prefix}colors/color_0",
-        #                     f"{self.prefix}colors/color_1",
-        #                     f"{self.prefix}colors/color_2",
-        #                     f"{self.prefix}colors/color_3"
-        # ]
-        # for plot_path in image_plot_paths:
-        #     view = rrb.Spatial2DView(
-        #         origin = plot_path,
-        #         time_ranges=[
-        #             rrb.VisibleTimeRange(
-        #                 "idx",
-        #                 start = rrb.TimeRangeBoundary.cursor_relative(seq = -self.IdxRangeBoundary),
-        #                 end = rrb.TimeRangeBoundary.cursor_relative(),
-        #             )
-        #         ],
-        #     )
-        #     views.append(view)
-
         grid = rrb.Grid(
             contents=views,
             grid_columns=2,
@@ -172,12 +169,12 @@ class RerunLogger:
                 values = state_info.get("qpos", [])
                 for idx, val in enumerate(values):
                     self.rec.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalars(val))
-            if part == "body":   
+            if part == "body":
                 print(f"Logging body states", state_info)
                 print(f"Logging body states", state_info.get("qpos"))
                 print(f"Logging body states", len(state_info.get("qpos")))
-                
-                
+
+
                 self.robot.log(state_info.get("qpos")[:29])
                 self.robot.log_transform_named_frames(
                     "/transforms",
@@ -195,30 +192,6 @@ class RerunLogger:
                 for idx, val in enumerate(values):
                     self.rec.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalars(val))
 
-        # # Log colors (images)
-        # colors = item_data.get('colors', {}) or {}
-        # for color_key, color_val in colors.items():
-        #     if color_val is not None:
-        #         rr.log(f"{self.prefix}colors/{color_key}", rr.Image(color_val))
-
-        # # Log depths (images)
-        # depths = item_data.get('depths', {}) or {}
-        # for depth_key, depth_val in depths.items():
-        #     if depth_val is not None:
-        #         # rr.log(f"{self.prefix}depths/{depth_key}", rr.Image(depth_val))
-        #         pass # Handle depth if needed
-
-        # # Log tactile if needed
-        # tactiles = item_data.get('tactiles', {}) or {}
-        # for hand, tactile_vals in tactiles.items():
-        #     if tactile_vals is not None:
-        #         pass # Handle tactile if needed
-
-        # # Log audios if needed
-        # audios = item_data.get('audios', {}) or {}
-        # for audio_key, audio_val in audios.items():
-        #     if audio_val is not None:
-        #         pass  # Handle audios if needed
 
     def log_episode_data(self, episode_data: list):
         for item_data in episode_data:
