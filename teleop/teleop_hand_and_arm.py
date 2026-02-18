@@ -4,7 +4,7 @@ import argparse
 from multiprocessing import Value, Array, Lock
 import threading
 import logging_mp
-logging_mp.basic_config(level=logging_mp.DEBUG)
+logging_mp.basic_config(level=logging_mp.INFO)
 logger_mp = logging_mp.get_logger(__name__)
 
 import os 
@@ -179,14 +179,25 @@ if __name__ == '__main__':
             dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
             gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, 
                                                      dual_gripper_state_array, dual_gripper_action_array, simulation_mode=args.sim)
-        elif args.ee == "inspire_dfx":
+        elif args.ee == "inspire_dfx" and args.input_mode == "controller":
+            logger_mp.info("Initializing Inspire Controller DFX with controller mode")
+            from teleop.robot_control.robot_hand_inspire import Inspire_Controller_DFX
+            left_hand_pos_array = Value('d', 0.0, lock = True)      # [input]
+            right_hand_pos_array = Value('d', 0.0, lock = True)     # [input]
+            dual_hand_data_lock = Lock()
+            dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
+            dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
+            hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, controller_mode=True)
+        elif args.ee == "inspire_dfx" and args.input_mode == "hand":
             from teleop.robot_control.robot_hand_inspire import Inspire_Controller_DFX
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
             right_hand_pos_array = Array('d', 75, lock = True)     # [input]
             dual_hand_data_lock = Lock()
             dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
             dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-            hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
+            controller = True if args.input_mode == "controller" else False
+            hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, controller_mode=False)
+            
         elif args.ee == "inspire_ftp":
             from teleop.robot_control.robot_hand_inspire import Inspire_Controller_FTP
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
@@ -299,7 +310,13 @@ if __name__ == '__main__':
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
                 with right_hand_pos_array.get_lock():
                     right_hand_pos_array[:] = tele_data.right_hand_pos.flatten()
+            if (args.ee == "dex3" or args.ee == "inspire_dfx" or args.ee == "inspire_ftp" or args.ee == "brainco") and args.input_mode == "controller":
+                with left_hand_pos_array.get_lock():
+                    left_hand_pos_array.value = tele_data.left_ctrl_triggerValue
+                with right_hand_pos_array.get_lock():
+                    right_hand_pos_array.value = tele_data.right_ctrl_triggerValue
             elif args.ee == "dex1" and args.input_mode == "controller":
+                print(tele_data)
                 with left_gripper_value.get_lock():
                     left_gripper_value.value = tele_data.left_ctrl_triggerValue
                 with right_gripper_value.get_lock():
@@ -325,6 +342,7 @@ if __name__ == '__main__':
                 loco_wrapper.Move(-tele_data.left_ctrl_thumbstickValue[1] * 0.3,
                                   -tele_data.left_ctrl_thumbstickValue[0] * 0.3,
                                   -tele_data.right_ctrl_thumbstickValue[0]* 0.3)
+                
 
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()

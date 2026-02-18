@@ -19,11 +19,13 @@ kTopicInspireDFXState = "rt/inspire/state"
 
 class Inspire_Controller_DFX:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
-                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, simulation_mode = False):
+                       dual_hand_action_array = None, fps = 100.0, Unit_Test = False, simulation_mode = False,
+                       controller_mode = False):
         logger_mp.info("Initialize Inspire_Controller_DFX...")
         self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
+        self.controller_mode = controller_mode
         if not self.Unit_Test:
             self.hand_retargeting = HandRetargeting(HandType.INSPIRE_HAND)
         else:
@@ -53,10 +55,10 @@ class Inspire_Controller_DFX:
             logger_mp.warning("[Inspire_Controller_DFX] Waiting to subscribe dds...")
         logger_mp.info("[Inspire_Controller_DFX] Subscribe dds ok.")
 
-        # hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
-        #                                                                   dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
-        # hand_control_process.daemon = True
-        # hand_control_process.start()
+        hand_control_process = Process(target=self.control_process, args=(left_hand_array, right_hand_array,  self.left_hand_state_array, self.right_hand_state_array,
+                                                                          dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array))
+        hand_control_process.daemon = True
+        hand_control_process.start()
 
         logger_mp.info("Initialize Inspire_Controller_DFX OK!")
 
@@ -101,6 +103,59 @@ class Inspire_Controller_DFX:
         time_elapsed = current_time - start_time
         sleep_time = max(0, (1 / self.fps) - time_elapsed)
         time.sleep(sleep_time)
+        
+    def controller_retarget(self,left_hand_goal, right_hand_goal):
+        with left_hand_goal.get_lock():
+            left_q_target = np.full(Inspire_Num_Motors, np.array(left_hand_goal.value).copy())
+        with right_hand_goal.get_lock():
+            right_q_target = np.full(Inspire_Num_Motors, np.array(right_hand_goal.value).copy())
+        print(left_q_target)
+        print(right_q_target)
+        return left_q_target, right_q_target
+        
+    def retarget(self,left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
+                        dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
+        # get dual hand state
+        left_q_target = np.full(Inspire_Num_Motors, 1.)
+        right_q_target = np.full(Inspire_Num_Motors, 1.)
+        with left_hand_array.get_lock():
+            left_hand_data  = np.array(left_hand_array[:]).reshape(25, 3).copy()
+        with right_hand_array.get_lock():
+            right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
+
+        
+        
+
+        if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
+            ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
+            ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - right_hand_data[self.hand_retargeting.right_indices[0,:]]
+
+            left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
+            right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
+
+            # In website https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand, you can find
+            #     In the official document, the angles are in the range [0, 1] ==> 0.0: fully closed  1.0: fully open
+            # The q_target now is in radians, ranges:
+            #     - idx 0~3: 0~1.7 (1.7 = closed)
+            #     - idx 4:   0~0.5
+            #     - idx 5:  -0.1~1.3
+            # We normalize them using (max - value) / range
+            def normalize(val, min_val, max_val):
+                return np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
+
+            for idx in range(Inspire_Num_Motors):
+                if idx <= 3:
+                    left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 1.7)
+                    right_q_target[idx] = normalize(right_q_target[idx], 0.0, 1.7)
+                elif idx == 4:
+                    left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 0.5)
+                    right_q_target[idx] = normalize(right_q_target[idx], 0.0, 0.5)
+                elif idx == 5:
+                    left_q_target[idx]  = normalize(left_q_target[idx], -0.1, 1.3)
+                    right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
+
+        
+        return left_q_target, right_q_target
 
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                               dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
@@ -121,45 +176,16 @@ class Inspire_Controller_DFX:
         try:
             while self.running:
                 start_time = time.time()
-                # get dual hand state
-                with left_hand_array.get_lock():
-                    left_hand_data  = np.array(left_hand_array[:]).reshape(25, 3).copy()
-                with right_hand_array.get_lock():
-                    right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
-
-                # Read left and right q_state from shared arrays
-                state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
-
-                if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
-                    ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
-                    ref_right_value = right_hand_data[self.hand_retargeting.right_indices[1,:]] - right_hand_data[self.hand_retargeting.right_indices[0,:]]
-
-                    left_q_target  = self.hand_retargeting.left_retargeting.retarget(ref_left_value)[self.hand_retargeting.left_dex_retargeting_to_hardware]
-                    right_q_target = self.hand_retargeting.right_retargeting.retarget(ref_right_value)[self.hand_retargeting.right_dex_retargeting_to_hardware]
-
-                    # In website https://support.unitree.com/home/en/G1_developer/inspire_dfx_dexterous_hand, you can find
-                    #     In the official document, the angles are in the range [0, 1] ==> 0.0: fully closed  1.0: fully open
-                    # The q_target now is in radians, ranges:
-                    #     - idx 0~3: 0~1.7 (1.7 = closed)
-                    #     - idx 4:   0~0.5
-                    #     - idx 5:  -0.1~1.3
-                    # We normalize them using (max - value) / range
-                    def normalize(val, min_val, max_val):
-                        return np.clip((max_val - val) / (max_val - min_val), 0.0, 1.0)
-
-                    for idx in range(Inspire_Num_Motors):
-                        if idx <= 3:
-                            left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 1.7)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 1.7)
-                        elif idx == 4:
-                            left_q_target[idx]  = normalize(left_q_target[idx], 0.0, 0.5)
-                            right_q_target[idx] = normalize(right_q_target[idx], 0.0, 0.5)
-                        elif idx == 5:
-                            left_q_target[idx]  = normalize(left_q_target[idx], -0.1, 1.3)
-                            right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
-
+                
+                if self.controller_mode:
+                    left_q_target, right_q_target = self.controller_retarget(left_hand_array, right_hand_array)
+                else: 
+                    left_q_target, right_q_target, state_data = self.retarget(left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
+                       dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
                 # get dual hand action
                 action_data = np.concatenate((left_q_target, right_q_target))
+                # Read left and right q_state from shared arrays
+                state_data = np.concatenate((np.array(left_hand_state_array[:]), np.array(right_hand_state_array[:])))
                 if dual_hand_state_array and dual_hand_action_array:
                     with dual_hand_data_lock:
                         dual_hand_state_array[:] = state_data
