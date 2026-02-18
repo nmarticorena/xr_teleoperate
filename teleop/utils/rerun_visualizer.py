@@ -81,7 +81,7 @@ class RerunEpisodeReader:
 
 
 class RerunLogger:
-    def __init__(self, prefix="", IdxRangeBoundary=30, memory_limit=None, save_dir="rerun_episodes"):
+    def __init__(self, prefix="", IdxRangeBoundary=30, memory_limit=None, save_dir="utils/data/stack_blocks/rerun/"):
         self.prefix = prefix
         self.IdxRangeBoundary = IdxRangeBoundary
         self.memory_limit = memory_limit
@@ -111,9 +111,11 @@ class RerunLogger:
         self.rec.set_time("idx", duration=0)
 
         self.robot = ReRunRobot.g1(self.rec)
+        self.left_hand = ReRunRobot.left_dfq_hand(self.rec)
+        self.right_hand = ReRunRobot.right_dfq_hand(self.rec)
 
         self.robot.log_transform_named_frames(
-            "transforms",
+            "/transforms",
             np.array([0.0, 0.0, 0.0]),
             np.array([0.0, 0.0, 0.0, 1.0]),
             parent_frame="world",
@@ -135,15 +137,6 @@ class RerunLogger:
         for plot_path in data_plot_paths:
             view = rrb.TimeSeriesView(
                 origin=plot_path,
-                time_ranges=[
-                    rrb.VisibleTimeRange(
-                        "idx",
-                        start=rrb.TimeRangeBoundary.cursor_relative(
-                            seq=-self.IdxRangeBoundary
-                        ),
-                        end=rrb.TimeRangeBoundary.cursor_relative(),
-                    )
-                ],
                 plot_legend=rrb.PlotLegend(visible=True),
             )
             views.append(view)
@@ -156,7 +149,7 @@ class RerunLogger:
         )
         views.append(rr.blueprint.SelectionPanel(state=rrb.PanelState.Collapsed))
         views.append(rr.blueprint.TimePanel(state=rrb.PanelState.Collapsed))
-        views.append(get_blueprint())
+        views.append(get_blueprint("world"))
         self.rec.send_blueprint(grid)
 
     def log_item_data(self, item_data: dict):
@@ -170,19 +163,19 @@ class RerunLogger:
                 for idx, val in enumerate(values):
                     self.rec.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalars(val))
             if part == "body":
-                print(f"Logging body states", state_info)
-                print(f"Logging body states", state_info.get("qpos"))
-                print(f"Logging body states", len(state_info.get("qpos")))
-
-
                 self.robot.log(state_info.get("qpos")[:29])
-                self.robot.log_transform_named_frames(
-                    "/transforms",
-                    np.array([0,0,0]),
-                    np.array([0,0,0,1]),
-                    parent_frame="world",
-                    child_frame="pelvis"
-                )
+                # self.robot.log_transform_named_frames(
+                #     "/transforms",
+                #     np.array([0,0,0]),
+                #     np.array([0,0,0,1]),
+                #     parent_frame="world",
+                #     child_frame="pelvis"
+                # )
+            if part == "left_ee":
+                self.left_hand.log(state_info.get("qpos"))
+            if part == "right_ee":
+                self.right_hand.log(state_info.get("qpos"))
+                
 
         # Log actions
         actions = item_data.get("actions", {}) or {}
