@@ -5,7 +5,7 @@ import logging_mp
 import yaml
 from dex_retargeting.retargeting_config import RetargetingConfig
 
-logger_mp = logging_mp.get_logger(__name__)
+logger_mp = logging_mp.getLogger(__name__)
 
 
 class HandType(Enum):
