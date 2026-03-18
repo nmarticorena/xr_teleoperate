@@ -1,18 +1,12 @@
 [submodule "teleop/televuer"]
 	path = teleop/televuer
-	url = https://github.com/unitreerobotics/televuer
+	url = https://github.com/nmarticorena/televuer.git
 [submodule "teleop/robot_control/dex-retargeting"]
 	path = teleop/robot_control/dex-retargeting
 	url = https://github.com/silencht/dex-retargeting
 [submodule "teleop/teleimager"]
 	path = teleop/teleimager
 	url = https://github.com/nmarticorena/teleimager.git
-[submodule "unitree_sdk2_python"]
-	path = unitree_sdk2_python
-	url = https://github.com/unitreerobotics/unitree_sdk2_python.git
 [submodule "dex-retargeting"]
 	path = dex-retargeting
 	url = https://github.com/dexsuite/dex-retargeting.git
-[submodule "inspire_hand_ws"]
-	path = inspire_hand_ws
-	url = https://github.com/NaCl-1374/inspire_hand_ws.git
