@@ -22,7 +22,7 @@ from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.ipc import IPC_Server
 from teleop.utils.motion_switcher import MotionSwitcher, LocoClientWrapper
 from sshkeyboard import listen_keyboard, stop_listening
-from InquirerPy impoer inquirer
+from InquirerPy import inquirer
 
 # for simulation
 from unitree_sdk2py.core.channel import ChannelPublisher
