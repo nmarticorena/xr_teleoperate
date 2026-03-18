@@ -509,7 +509,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c2/9c/2ae010c4f88bcc8b1af1bb3ca7874d8fecaa315c02d81a0e94a244b507f4/killport-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3c/49/c3bec783144c226b5ef3728ed66d7fc2d08c553922a3892591958284801a/libcoal-3.0.2-0-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/6b/2b/0408c86b4556e2f5b783e92e421dfbb357efd6363f457d8facd9c78eed5d/libpinocchio-3.9.0-1-py3-none-manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/23/78/f6ff6904ccf176697d4dae115306447650b46674a0680767fb015a4b73ac/logging_mp-0.1.6-py3-none-any.whl
+      - pypi: git+https://github.com/unitreerobotics/logging-mp.git?rev=78f4e4f#78f4e4fd95c49f42f4a6501b417ac1954b40a1f5
       - pypi: https://files.pythonhosted.org/packages/b7/09/2a06956383c0fdebaef5aa9246e2356776f12ea6f2a44bd1368abf0e46c4/msgpack-1.1.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c7/7e/4929ca8593f54c9d54306db9609082ab6ab72100842b8bd73fd233f06d6f/nlopt-2.10.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fd/55/b3b49a1b97aabcfbbd6c7326df9cb0b6fa0c0aefa8e89d500939e04aa229/opencv_python-4.13.0.92-cp37-abi3-manylinux_2_28_x86_64.whl
@@ -4708,10 +4708,9 @@ packages:
   purls: []
   size: 6136884
   timestamp: 1772024545
-- pypi: https://files.pythonhosted.org/packages/23/78/f6ff6904ccf176697d4dae115306447650b46674a0680767fb015a4b73ac/logging_mp-0.1.6-py3-none-any.whl
+- pypi: git+https://github.com/unitreerobotics/logging-mp.git?rev=78f4e4f#78f4e4fd95c49f42f4a6501b417ac1954b40a1f5
   name: logging-mp
-  version: 0.1.6
-  sha256: 8f9c455c5f33e570e16a1723d266b22fe9a4195927c4c1d6ec92e54606ce906a
+  version: 0.2.0
   requires_dist:
   - rich>=13.0
   requires_python: '>=3.8'
