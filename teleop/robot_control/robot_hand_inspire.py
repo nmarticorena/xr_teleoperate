@@ -81,34 +81,12 @@ class Inspire_Controller_DFX:
 
         self.HandCmb_publisher.Write(self.hand_msg)
         # logger_mp.debug("hand ctrl publish ok.")
-    def dummy_hand(self, left_state:float, right_state:float,
-        dual_hand_data_lock = None,dual_hand_state_array = None, dual_hand_action_array = None):
-
-        start_time = time.time()
-
-        left_q_target = np.full(Inspire_Num_Motors, left_state)
-        right_q_target = np.full(Inspire_Num_Motors, right_state)
-        # initialize inspire hand's cmd msg
-        self.hand_msg  = MotorCmds_()
-        self.hand_msg.cmds = [unitree_go_msg_dds__MotorCmd_() for _ in range(len(Inspire_Right_Hand_JointIndex) + len(Inspire_Left_Hand_JointIndex))]
-
-        for idx, id in enumerate(Inspire_Left_Hand_JointIndex):
-            self.hand_msg.cmds[id].q = left_q_target
-        for idx, id in enumerate(Inspire_Right_Hand_JointIndex):
-            self.hand_msg.cmds[id].q = right_q_target
-        self.ctrl_dual_hand(left_q_target, right_q_target)
-        current_time = time.time()
-        time_elapsed = current_time - start_time
-        sleep_time = max(0, (1 / self.fps) - time_elapsed)
-        time.sleep(sleep_time)
         
     def controller_retarget(self,left_hand_goal, right_hand_goal):
         with left_hand_goal.get_lock():
             left_q_target = np.full(Inspire_Num_Motors, np.array(left_hand_goal.value).copy())
         with right_hand_goal.get_lock():
             right_q_target = np.full(Inspire_Num_Motors, np.array(right_hand_goal.value).copy())
-        print(left_q_target)
-        print(right_q_target)
         return left_q_target, right_q_target
         
     def retarget(self,left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
@@ -120,9 +98,6 @@ class Inspire_Controller_DFX:
             left_hand_data  = np.array(left_hand_array[:]).reshape(25, 3).copy()
         with right_hand_array.get_lock():
             right_hand_data = np.array(right_hand_array[:]).reshape(25, 3).copy()
-
-        
-        
 
         if not np.all(right_hand_data == 0.0) and not np.all(left_hand_data[4] == np.array([-1.13, 0.3, 0.15])): # if hand data has been initialized.
             ref_left_value = left_hand_data[self.hand_retargeting.left_indices[1,:]] - left_hand_data[self.hand_retargeting.left_indices[0,:]]
