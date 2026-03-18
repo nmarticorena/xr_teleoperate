@@ -7,11 +7,9 @@ from enum import IntEnum
 import threading
 import time
 from multiprocessing import Process, Array
-from inspire_sdkpy import inspire_dds  # lazy import
-import inspire_sdkpy.inspire_hand_defaut as inspire_hand_default
 
 import logging_mp
-logger_mp = logging_mp.get_logger(__name__)
+logger_mp = logging_mp.getLogger(__name__)
 
 Inspire_Num_Motors = 6
 kTopicInspireDFXCommand = "rt/inspire/cmd"
@@ -185,8 +183,8 @@ class Inspire_Controller_FTP:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
                        dual_hand_action_array = None, fps = 100.0, Unit_Test = False, simulation_mode = False):
         logger_mp.info("Initialize Inspire_Controller_FTP...")
-        # from inspire_sdkpy import inspire_dds  # lazy import
-        # import inspire_sdkpy.inspire_hand_defaut as inspire_hand_default
+        from inspire_sdkpy import inspire_dds  # lazy import
+        import inspire_sdkpy.inspire_hand_defaut as inspire_hand_default
         self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
