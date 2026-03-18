@@ -72,6 +72,25 @@ def get_state() -> dict:
         "RECORD_RUNNING": RECORD_RUNNING,
     }
 
+
+AUTO_STOP_SQUEEZE_THRESHOLD = 0.95
+AUTO_STOP_RELEASE_THRESHOLD = 0.70
+AUTO_STOP_HOLD_SECONDS = 2.0
+
+
+def both_hands_fully_closed(tele_data) -> bool:
+    return (
+        tele_data.left_hand_squeezeValue >= AUTO_STOP_SQUEEZE_THRESHOLD
+        and tele_data.right_hand_squeezeValue >= AUTO_STOP_SQUEEZE_THRESHOLD
+    )
+
+
+def both_hands_released(tele_data) -> bool:
+    return (
+        tele_data.left_hand_squeezeValue <= AUTO_STOP_RELEASE_THRESHOLD
+        and tele_data.right_hand_squeezeValue <= AUTO_STOP_RELEASE_THRESHOLD
+    )
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # basic control parameters
@@ -273,6 +292,8 @@ if __name__ == '__main__':
         else:
             logger_mp.info("🔵  Recording is DISABLED (run with --record to enable).")
         logger_mp.info("⚠️  IMPORTANT: Please keep your distance and stay safe.")
+        auto_stop_hold_start = None
+        auto_stop_armed = True
         READY = True                  # now ready to (1) enter START state
         while not START and not STOP: # wait for start or stop signal.
             time.sleep(0.033)
@@ -316,6 +337,25 @@ if __name__ == '__main__':
 
             # get xr's tele data
             tele_data = tv_wrapper.get_tele_data()
+
+            if args.record and args.input_mode == "hand":
+                if RECORD_RUNNING and auto_stop_armed:
+                    if both_hands_fully_closed(tele_data):
+                        if auto_stop_hold_start is None:
+                            auto_stop_hold_start = time.time()
+                        elif time.time() - auto_stop_hold_start >= AUTO_STOP_HOLD_SECONDS:
+                            logger_mp.info("Both hands stayed fully closed for 2 seconds, stopping episode.")
+                            RECORD_TOGGLE = True
+                            auto_stop_armed = False
+                            auto_stop_hold_start = None
+                    else:
+                        auto_stop_hold_start = None
+                else:
+                    auto_stop_hold_start = None
+
+                if not auto_stop_armed and both_hands_released(tele_data):
+                    auto_stop_armed = True
+
             if (args.ee == "dex3" or args.ee == "inspire_dfx" or args.ee == "inspire_ftp" or args.ee == "brainco") and args.input_mode == "hand":
                 with left_hand_pos_array.get_lock():
                     left_hand_pos_array[:] = tele_data.left_hand_pos.flatten()
