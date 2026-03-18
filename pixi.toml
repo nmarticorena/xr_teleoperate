@@ -7,7 +7,8 @@ version = "0.1.0"
 
 [tasks]
 set_quest = {cmd = "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem"}
-teleop = {cmd = "python teleop_hand_and_arm.py --input-mode=controller --ee=inspire_dfx --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record" , cwd = "teleop"}
+teleop_sim = {cmd = "python teleop_hand_and_arm.py --input-mode=controller --ee=inspire_dfx --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record" , cwd = "teleop"}
+teleop_real = {cmd = "python teleop_hand_and_arm.py --input-mode=hand --ee=inspire_ftp --img-server-ip 192.168.123.164  --arm=G1_29 --record" , cwd = "teleop"}
 teleop_1d = {cmd = "python teleop_hand_and_arm.py --input-mode=controller --ee=dex1 --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record" , cwd = "teleop"}
 
 [system-requirements]
