@@ -22,6 +22,7 @@ from teleop.utils.episode_writer import EpisodeWriter
 from teleop.utils.ipc import IPC_Server
 from teleop.utils.motion_switcher import MotionSwitcher, LocoClientWrapper
 from sshkeyboard import listen_keyboard, stop_listening
+from InquirerPy impoer inquirer
 
 # for simulation
 from unitree_sdk2py.core.channel import ChannelPublisher
@@ -96,6 +97,18 @@ if __name__ == '__main__':
     parser.add_argument('--task-steps', type = str, default = 'step1: do this; step2: do that;', help = 'task steps for recording at json file')
 
     args = parser.parse_args()
+
+    # Override task-related args interactively
+    task_answers = inquirer.prompt([
+        inquirer.Text('task_name',  message='Task name',        default=args.task_name),
+        inquirer.Text('task_goal',  message='Task goal',        default=args.task_goal),
+        inquirer.Text('task_desc',  message='Task description', default=args.task_desc),
+        inquirer.Text('task_steps', message='Task steps',       default=args.task_steps),
+    ])
+
+    for key, val in task_answers.items():
+        setattr(args, key, val)
+
     logger_mp.info(f"args: {args}")
 
     try:

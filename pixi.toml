@@ -31,6 +31,7 @@ motion_tools = {version = ">=0.1.13,<0.2", channel = "nmarticorena"}
 gdown = ">=5.2.1,<6"
 inspire_hand_sdk = {channel = "nmarticorena"}
 unitree_sdk2py = {channel = "nmarticorena"}
+inquirerpy = ">=0.3.4,<0.4"
 
 [pypi-dependencies]
 teleimager = {path = "teleop/teleimager", editable = true}
