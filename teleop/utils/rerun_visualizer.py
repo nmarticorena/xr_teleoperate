@@ -1,4 +1,5 @@
 import logging_mp
+import math
 import uuid
 
 import json
@@ -140,17 +141,20 @@ class RerunLogger:
                 plot_legend=rrb.PlotLegend(visible=True),
             )
             views.append(view)
-
-        grid = rrb.Grid(
+        
+        grid_columns = 2
+        num_rows = math.ceil(len(views) / grid_columns)
+        
+        grid = rrb.Blueprint(rrb.Grid(
             contents=views,
-            grid_columns=2,
-            column_shares=[1, 1],
-            row_shares=[1, 1],
-        )
+            grid_columns=grid_columns,
+            column_shares=[1] * grid_columns,
+            row_shares=[1] * num_rows,
+        ))
         views.append(rr.blueprint.SelectionPanel(state=rrb.PanelState.Collapsed))
         views.append(rr.blueprint.TimePanel(state=rrb.PanelState.Collapsed))
         views.append(get_blueprint("world"))
-        self.rec.send_blueprint(grid)
+        self.rec.send_blueprint(get_blueprint("pelvis"))
 
     def log_item_data(self, item_data: dict):
         self.rec.set_time("idx", duration = item_data.get("idx", 0))

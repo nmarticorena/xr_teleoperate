@@ -164,7 +164,7 @@ if __name__ == '__main__':
             listen_keyboard_thread.start()
 
         # image client
-        img_client = ImageClient(host=args.img_server_ip)
+        img_client = ImageClient(host=args.img_server_ip, request_bgr = True)
         camera_config = img_client.get_cam_config()
         logger_mp.debug(f"Camera config: {camera_config}")
         logger_mp.debug(f"args config: {args}")
@@ -313,7 +313,7 @@ if __name__ == '__main__':
         while not START and not STOP: # wait for start or stop signal.
             time.sleep(0.033)
             if camera_config['head_camera']['enable_zmq'] and xr_need_local_img:
-                head_img,_ = img_client.get_head_frame()
+                head_img = img_client.get_head_frame().bgr
                 tv_wrapper.render_to_xr(head_img)
 
                 tele_data = tv_wrapper.get_tele_data()
@@ -326,7 +326,7 @@ if __name__ == '__main__':
             # get image
             if camera_config['head_camera']['enable_zmq']:
                 if args.record or xr_need_local_img:
-                    head_img,_ = img_client.get_head_frame()
+                    head_img = img_client.get_head_frame().bgr
                 if xr_need_local_img:
                     tv_wrapper.render_to_xr(head_img)
             if camera_config.get('left_wrist_camera',{}).get('enable_zmq',False):

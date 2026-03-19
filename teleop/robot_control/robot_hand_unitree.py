@@ -435,7 +435,7 @@ if __name__ == "__main__":
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):\n")
     if user_input.lower() == 's':
         while True:
-            head_img, head_img_fps = img_client.get_head_frame()
+            head_img = img_client.get_head_frame().bgr
             tv_wrapper.set_display_image(head_img)
             tele_data = tv_wrapper.get_tele_data()
             if args.ee == "dex3" and args.xr_mode == "hand":
