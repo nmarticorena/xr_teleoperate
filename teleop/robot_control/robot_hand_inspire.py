@@ -8,6 +8,9 @@ import threading
 import time
 from multiprocessing import Process, Array
 
+from inspire_sdkpy import inspire_dds
+import inspire_sdkpy.inspire_hand_defaut as inspire_hand_default
+
 import logging_mp
 logger_mp = logging_mp.getLogger(__name__)
 
@@ -81,14 +84,14 @@ class Inspire_Controller_DFX:
 
         self.HandCmb_publisher.Write(self.hand_msg)
         # logger_mp.debug("hand ctrl publish ok.")
-        
+
     def controller_retarget(self,left_hand_goal, right_hand_goal):
         with left_hand_goal.get_lock():
             left_q_target = np.full(Inspire_Num_Motors, np.array(left_hand_goal.value).copy())
         with right_hand_goal.get_lock():
             right_q_target = np.full(Inspire_Num_Motors, np.array(right_hand_goal.value).copy())
         return left_q_target, right_q_target
-        
+
     def retarget(self,left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                         dual_hand_data_lock = None, dual_hand_state_array = None, dual_hand_action_array = None):
         # get dual hand state
@@ -127,7 +130,7 @@ class Inspire_Controller_DFX:
                     left_q_target[idx]  = normalize(left_q_target[idx], -0.1, 1.3)
                     right_q_target[idx] = normalize(right_q_target[idx], -0.1, 1.3)
 
-        
+
         return left_q_target, right_q_target
 
     def control_process(self, left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
@@ -149,10 +152,10 @@ class Inspire_Controller_DFX:
         try:
             while self.running:
                 start_time = time.time()
-                
+
                 if self.controller_mode:
                     left_q_target, right_q_target = self.controller_retarget(left_hand_array, right_hand_array)
-                else: 
+                else:
                     left_q_target, right_q_target, state_data = self.retarget(left_hand_array, right_hand_array, left_hand_state_array, right_hand_state_array,
                        dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array)
                 # get dual hand action
@@ -183,8 +186,6 @@ class Inspire_Controller_FTP:
     def __init__(self, left_hand_array, right_hand_array, dual_hand_data_lock = None, dual_hand_state_array = None,
                        dual_hand_action_array = None, fps = 100.0, Unit_Test = False, simulation_mode = False):
         logger_mp.info("Initialize Inspire_Controller_FTP...")
-        from inspire_sdkpy import inspire_dds  # lazy import
-        import inspire_sdkpy.inspire_hand_defaut as inspire_hand_default
         self.fps = fps
         self.Unit_Test = Unit_Test
         self.simulation_mode = simulation_mode
