@@ -1,12 +1,14 @@
 [submodule "teleop/televuer"]
 	path = teleop/televuer
 	url = https://github.com/nmarticorena/televuer.git
+	branch = main
 [submodule "teleop/robot_control/dex-retargeting"]
 	path = teleop/robot_control/dex-retargeting
 	url = https://github.com/silencht/dex-retargeting
 [submodule "teleop/teleimager"]
 	path = teleop/teleimager
 	url = https://github.com/nmarticorena/teleimager.git
+	branch = main
 [submodule "dex-retargeting"]
 	path = dex-retargeting
 	url = https://github.com/dexsuite/dex-retargeting.git
