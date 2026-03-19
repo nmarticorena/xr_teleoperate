@@ -36,8 +36,10 @@ class EpisodeWriter():
         self.rerun_log = rerun_log
         if self.rerun_log:
             logger_mp.info("==> RerunLogger initializing...\n")
-            self.rerun_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit = "300MB")
+            self.rerun_logger = RerunLogger(prefix="online/", IdxRangeBoundary = 60, memory_limit = "300MB", save_dir = os.path.join(self.task_dir, "rerun/"))
             logger_mp.info("==> RerunLogger initializing ok.\n")
+
+        self.task_dir = os.path.join(self.task_dir, "episodes")
 
         self.item_id = -1
         self.episode_id = -1

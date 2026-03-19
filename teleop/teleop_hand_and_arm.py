@@ -121,7 +121,7 @@ if __name__ == '__main__':
         "task_name": inquirer.text(
             message="Task name",
             default=args.task_name,
-        ).execute(),
+        ).execute().replace(" ", "_"),
 
         "task_goal": inquirer.text(
             message="Task goal",
@@ -138,6 +138,7 @@ if __name__ == '__main__':
             default=args.task_steps,
         ).execute(),
     }
+
 
     for key, val in task_answers.items():
         setattr(args, key, val)
