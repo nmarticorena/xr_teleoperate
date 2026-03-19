@@ -1,4 +1,5 @@
 import os
+import traceback
 import cv2
 import json
 import datetime
@@ -152,7 +153,8 @@ class EpisodeWriter():
                 try:
                     self._process_item_data(item_data)
                 except Exception as e:
-                    logger_mp.info(f"Error processing item_data (idx={item_data['idx']}): {e}")
+                    logger_mp.info(f"Error processing item_data (idx={item_data['idx']}): {e}\n"
+                    f"{traceback.format_exc()}")
                 self.item_data_queue.task_done()
             except Empty:
                 pass
