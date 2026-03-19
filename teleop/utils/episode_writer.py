@@ -9,6 +9,7 @@ from .rerun_visualizer import RerunLogger
 from queue import Queue, Empty
 from threading import Thread
 import logging_mp
+import rerun as rr
 logger_mp = logging_mp.getLogger(__name__)
 
 class EpisodeWriter():
@@ -178,6 +179,8 @@ class EpisodeWriter():
                 if not cv2.imwrite(os.path.join(self.color_dir, color_name), color):
                     logger_mp.info(f"Failed to save color image.")
                 item_data['colors'][color_key] = os.path.join('colors', color_name)
+                if self.rerun_log:
+                    self.rerun_logger.rec.log("cameras/{}".format(idx_color), rr.Image(color).compress(80))
 
         # Save depths
         if depths:

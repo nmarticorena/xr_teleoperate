@@ -94,7 +94,7 @@ class RerunLogger:
         self.robot = None
 
 
-    def start_episode(self, prefix: str, episode_id: int, spawn_viewer: bool = True):
+    def start_episode(self, prefix: str, episode_id: int, spawn_viewer: bool = False):
         self.prefix = prefix
 
         recording_id =  uuid.uuid4()
@@ -115,13 +115,13 @@ class RerunLogger:
         self.left_hand = ReRunRobot.left_dfq_hand(self.rec)
         self.right_hand = ReRunRobot.right_dfq_hand(self.rec)
 
-        self.robot.log_transform_named_frames(
-            "/transforms",
-            np.array([0.0, 0.0, 0.0]),
-            np.array([0.0, 0.0, 0.0, 1.0]),
-            parent_frame="world",
-            child_frame="pelvis",
-        )
+        # self.robot.log_transform_named_frames(
+        #     "/transforms",
+        #     np.array([0.0, 0.0, 0.0]),
+        #     np.array([0.0, 0.0, 0.0, 1.0]),
+        #     parent_frame="world",
+        #     child_frame="pelvis",
+        # )
 
         if self.IdxRangeBoundary:
             self.setup_blueprint()
@@ -157,10 +157,12 @@ class RerunLogger:
         self.rec.send_blueprint(get_blueprint("pelvis"))
 
     def log_item_data(self, item_data: dict):
+        print("Logging items")
         self.rec.set_time("idx", duration = item_data.get("idx", 0))
 
         # Log states
         states = item_data.get("states", {}) or {}
+        print(states)
         for part, state_info in states.items():
             if part != "body" and state_info:
                 values = state_info.get("qpos", [])
@@ -168,13 +170,6 @@ class RerunLogger:
                     self.rec.log(f"{self.prefix}{part}/states/qpos/{idx}", rr.Scalars(val))
             if part == "body":
                 self.robot.log(state_info.get("qpos")[:29])
-                # self.robot.log_transform_named_frames(
-                #     "/transforms",
-                #     np.array([0,0,0]),
-                #     np.array([0,0,0,1]),
-                #     parent_frame="world",
-                #     child_frame="pelvis"
-                # )
             if part == "left_ee":
                 self.left_hand.log(state_info.get("qpos"))
             if part == "right_ee":
@@ -188,6 +183,8 @@ class RerunLogger:
                 values = action_info.get("qpos", [])
                 for idx, val in enumerate(values):
                     self.rec.log(f"{self.prefix}{part}/actions/qpos/{idx}", rr.Scalars(val))
+                    
+                    
 
 
     def log_episode_data(self, episode_data: list):
