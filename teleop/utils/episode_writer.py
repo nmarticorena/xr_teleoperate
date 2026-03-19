@@ -180,7 +180,8 @@ class EpisodeWriter():
                     logger_mp.info(f"Failed to save color image.")
                 item_data['colors'][color_key] = os.path.join('colors', color_name)
                 if self.rerun_log:
-                    self.rerun_logger.rec.log("cameras/{}".format(idx_color), rr.Image(color).compress(80))
+                    rgb = cv2.cvtColor(color, cv2.COLOR_BGR2RGB)
+                    self.rerun_logger.rec.log("cameras/{}".format(idx_color), rr.Image(rgb).compress(80))
 
         # Save depths
         if depths:
