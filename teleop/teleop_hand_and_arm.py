@@ -7,13 +7,13 @@ import logging_mp
 logging_mp.basicConfig(level=logging_mp.INFO)
 logger_mp = logging_mp.getLogger(__name__)
 
-import os 
+import os
 import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from unitree_sdk2py.core.channel import ChannelFactoryInitialize # dds 
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize # dds
 from televuer import TeleVuerWrapper
 from teleop.robot_control.robot_arm import G1_29_ArmController, G1_23_ArmController, H1_2_ArmController, H1_ArmController
 from teleop.robot_control.robot_arm_ik import G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK
@@ -117,13 +117,27 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Override task-related args interactively
-    task_answers = inquirer.prompt([
-        inquirer.Text('task_name',  message='Task name',        default=args.task_name),
-        inquirer.Text('task_goal',  message='Task goal',        default=args.task_goal),
-        inquirer.Text('task_desc',  message='Task description', default=args.task_desc),
-        inquirer.Text('task_steps', message='Task steps',       default=args.task_steps),
-    ])
+    task_answers = {
+        "task_name": inquirer.text(
+            message="Task name",
+            default=args.task_name,
+        ).execute(),
+
+        "task_goal": inquirer.text(
+            message="Task goal",
+            default=args.task_goal,
+        ).execute(),
+
+        "task_desc": inquirer.text(
+            message="Task description",
+            default=args.task_desc,
+        ).execute(),
+
+        "task_steps": inquirer.text(
+            message="Task steps",
+            default=args.task_steps,
+        ).execute(),
+    }
 
     for key, val in task_answers.items():
         setattr(args, key, val)
@@ -143,13 +157,13 @@ if __name__ == '__main__':
             ipc_server.start()
         # sshkeyboard communication mode
         else:
-            listen_keyboard_thread = threading.Thread(target=listen_keyboard, 
-                                                      kwargs={"on_press": on_press, "until": None, "sequential": False,}, 
+            listen_keyboard_thread = threading.Thread(target=listen_keyboard,
+                                                      kwargs={"on_press": on_press, "until": None, "sequential": False,},
                                                       daemon=True)
             listen_keyboard_thread.start()
 
         # image client
-        img_client = ImageClient(host=args.img_server_ip, request_bgr=True)
+        img_client = ImageClient(host=args.img_server_ip)
         camera_config = img_client.get_cam_config()
         logger_mp.debug(f"Camera config: {camera_config}")
         logger_mp.debug(f"args config: {args}")
@@ -157,7 +171,7 @@ if __name__ == '__main__':
         logger_mp.info(f"need local img: {xr_need_local_img}")
 
         # televuer_wrapper: obtain hand pose data from the XR device and transmit the robot's head camera image to the XR device.
-        tv_wrapper = TeleVuerWrapper(use_hand_tracking=args.input_mode == "hand", 
+        tv_wrapper = TeleVuerWrapper(use_hand_tracking=args.input_mode == "hand",
                                      binocular=camera_config['head_camera']['binocular'],
                                      img_shape=camera_config['head_camera']['image_shape'],
                                      # maybe should decrease fps for better performance?
@@ -168,7 +182,7 @@ if __name__ == '__main__':
                                      webrtc=camera_config['head_camera']['enable_webrtc'],
                                      webrtc_url=f"https://{args.img_server_ip}:{camera_config['head_camera']['webrtc_port']}/offer",
                                      )
-        
+
         # motion mode (G1: Regular mode R1+X, not Running mode R2+A)
         if args.motion:
             if args.input_mode == "controller":
@@ -200,7 +214,7 @@ if __name__ == '__main__':
             dual_hand_data_lock = Lock()
             dual_hand_state_array = Array('d', 14, lock = False)   # [output] current left, right hand state(14) data.
             dual_hand_action_array = Array('d', 14, lock = False)  # [output] current left, right hand action(14) data.
-            hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, 
+            hand_ctrl = Dex3_1_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock,
                                           dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
         elif args.ee == "dex1":
             from teleop.robot_control.robot_hand_unitree import Dex1_1_Gripper_Controller
@@ -209,7 +223,7 @@ if __name__ == '__main__':
             dual_gripper_data_lock = Lock()
             dual_gripper_state_array = Array('d', 2, lock=False)   # current left, right gripper state(2) data.
             dual_gripper_action_array = Array('d', 2, lock=False)  # current left, right gripper action(2) data.
-            gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock, 
+            gripper_ctrl = Dex1_1_Gripper_Controller(left_gripper_value, right_gripper_value, dual_gripper_data_lock,
                                                      dual_gripper_state_array, dual_gripper_action_array, simulation_mode=args.sim)
         elif args.ee == "inspire_dfx" and args.input_mode == "controller":
             logger_mp.info("Initializing Inspire Controller DFX with controller mode")
@@ -229,7 +243,7 @@ if __name__ == '__main__':
             dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
             controller = True if args.input_mode == "controller" else False
             hand_ctrl = Inspire_Controller_DFX(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim, controller_mode=False)
-            
+
         elif args.ee == "inspire_ftp":
             from teleop.robot_control.robot_hand_inspire import Inspire_Controller_FTP
             left_hand_pos_array = Array('d', 75, lock = True)      # [input]
@@ -245,11 +259,11 @@ if __name__ == '__main__':
             dual_hand_data_lock = Lock()
             dual_hand_state_array = Array('d', 12, lock = False)   # [output] current left, right hand state(12) data.
             dual_hand_action_array = Array('d', 12, lock = False)  # [output] current left, right hand action(12) data.
-            hand_ctrl = Brainco_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock, 
+            hand_ctrl = Brainco_Controller(left_hand_pos_array, right_hand_pos_array, dual_hand_data_lock,
                                            dual_hand_state_array, dual_hand_action_array, simulation_mode=args.sim)
         else:
             pass
-        
+
         # affinity mode (if you dont know what it is, then you probably don't need it)
         if args.affinity:
             import psutil
@@ -260,7 +274,7 @@ if __name__ == '__main__':
                 logger_mp.info("Set high priority successfully.")
             except psutil.AccessDenied:
                 logger_mp.warning("Failed to set high priority. Please run as root.")
-                
+
             for child in p.children(recursive=True):
                 try:
                     logger_mp.info(f"Child process {child.pid} name: {child.name()}")
@@ -282,7 +296,7 @@ if __name__ == '__main__':
                                      task_goal = args.task_goal,
                                      task_desc = args.task_desc,
                                      task_steps = args.task_steps,
-                                     frequency = args.frequency, 
+                                     frequency = args.frequency,
                                      rerun_log = not args.headless)
 
         logger_mp.info("----------------------------------------------------------------")
@@ -298,9 +312,9 @@ if __name__ == '__main__':
         while not START and not STOP: # wait for start or stop signal.
             time.sleep(0.033)
             if camera_config['head_camera']['enable_zmq'] and xr_need_local_img:
-                head_img = img_client.get_head_frame()
+                head_img,_ = img_client.get_head_frame()
                 tv_wrapper.render_to_xr(head_img)
-                
+
                 tele_data = tv_wrapper.get_tele_data()
 
         logger_mp.info("---------------------🚀start Tracking🚀-------------------------")
@@ -311,7 +325,7 @@ if __name__ == '__main__':
             # get image
             if camera_config['head_camera']['enable_zmq']:
                 if args.record or xr_need_local_img:
-                    head_img = img_client.get_head_frame()
+                    head_img,_ = img_client.get_head_frame()
                 if xr_need_local_img:
                     tv_wrapper.render_to_xr(head_img)
             if camera_config.get('left_wrist_camera',{}).get('enable_zmq',False):
@@ -379,7 +393,7 @@ if __name__ == '__main__':
                     right_gripper_value.value = tele_data.right_hand_pinchValue
             else:
                 pass
-            
+
             # high level control
             if args.input_mode == "controller" and args.motion:
                 # quit teleoperate
@@ -393,12 +407,12 @@ if __name__ == '__main__':
                 loco_wrapper.Move(-tele_data.left_ctrl_thumbstickValue[1] * 0.3,
                                   -tele_data.left_ctrl_thumbstickValue[0] * 0.3,
                                   -tele_data.right_ctrl_thumbstickValue[0]* 0.3)
-                
+
 
             # get current robot state data.
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
-            
+
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
@@ -501,57 +515,57 @@ if __name__ == '__main__':
                             else:
                                 logger_mp.warning("Right wrist image is None!")
                     states = {
-                        "left_arm": {                                                                    
+                        "left_arm": {
                             "qpos":   left_arm_state.tolist(),    # numpy.array -> list
-                            "qvel":   [],                          
-                            "torque": [],                        
-                        }, 
-                        "right_arm": {                                                                    
-                            "qpos":   right_arm_state.tolist(),       
-                            "qvel":   [],                          
-                            "torque": [],                         
-                        },                        
-                        "left_ee": {                                                                    
-                            "qpos":   left_ee_state,           
-                            "qvel":   [],                           
-                            "torque": [],                          
-                        }, 
-                        "right_ee": {                                                                    
-                            "qpos":   right_ee_state,       
-                            "qvel":   [],                           
-                            "torque": [],  
-                        }, 
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "right_arm": {
+                            "qpos":   right_arm_state.tolist(),
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "left_ee": {
+                            "qpos":   left_ee_state,
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "right_ee": {
+                            "qpos":   right_ee_state,
+                            "qvel":   [],
+                            "torque": [],
+                        },
                         "body": {
                             "qpos": current_body_state,
-                        }, 
+                        },
                     }
                     actions = {
-                        "left_arm": {                                   
-                            "qpos":   left_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],      
-                        }, 
-                        "right_arm": {                                   
-                            "qpos":   right_arm_action.tolist(),       
-                            "qvel":   [],       
-                            "torque": [],       
-                        },                         
-                        "left_ee": {                                   
-                            "qpos":   left_hand_action,       
-                            "qvel":   [],       
-                            "torque": [],       
-                        }, 
-                        "right_ee": {                                   
-                            "qpos":   right_hand_action,       
-                            "qvel":   [],       
-                            "torque": [], 
-                        }, 
+                        "left_arm": {
+                            "qpos":   left_arm_action.tolist(),
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "right_arm": {
+                            "qpos":   right_arm_action.tolist(),
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "left_ee": {
+                            "qpos":   left_hand_action,
+                            "qvel":   [],
+                            "torque": [],
+                        },
+                        "right_ee": {
+                            "qpos":   right_hand_action,
+                            "qvel":   [],
+                            "torque": [],
+                        },
                         "body": {
                             "qpos": current_body_action,
-                        }, 
+                        },
                     }
                     if args.sim:
-                        sim_state = sim_state_subscriber.read_data()            
+                        sim_state = sim_state_subscriber.read_data()
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions, sim_state=sim_state)
                     else:
                         recorder.add_item(colors=colors, depths=depths, states=states, actions=actions)
@@ -572,7 +586,7 @@ if __name__ == '__main__':
             arm_ctrl.ctrl_dual_arm_go_home()
         except Exception as e:
             logger_mp.error(f"Failed to ctrl_dual_arm_go_home: {e}")
-        
+
         try:
             if args.ipc:
                 ipc_server.stop()
@@ -581,7 +595,7 @@ if __name__ == '__main__':
                 listen_keyboard_thread.join()
         except Exception as e:
             logger_mp.error(f"Failed to stop keyboard listener or ipc server: {e}")
-        
+
         try:
             img_client.close()
         except Exception as e:
@@ -605,7 +619,7 @@ if __name__ == '__main__':
                 sim_state_subscriber.stop_subscribe()
         except Exception as e:
             logger_mp.error(f"Failed to stop sim state subscriber: {e}")
-        
+
         try:
             if args.record:
                 recorder.close()
