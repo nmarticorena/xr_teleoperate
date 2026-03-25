@@ -420,6 +420,11 @@ if __name__ == '__main__':
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
+            left_p, right_p = arm_ik.get_poses(current_lr_arm_q)
+
+            tv_wrapper.update_robot_pose(left_p)
+
+
 
             # solve ik using motor data and wrist pose, then use ik results to control arms.
             time_ik_start = time.time()
