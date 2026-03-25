@@ -1199,6 +1199,32 @@ class H1_ArmIK:
             # return sol_q, sol_tauff
             return current_lr_arm_motor_q, np.zeros(self.reduced_robot.model.nv)
         
+
+def _shared_get_poses(self, current_lr_arm_motor_q=None):
+    """
+    Return the current left/right end-effector poses from the reduced robot model.
+
+    If current_lr_arm_motor_q is None, use the solver's current internal configuration.
+    """
+    if current_lr_arm_motor_q is None:
+        q = np.asarray(self.init_data, dtype=np.float64)
+    else:
+        q = np.asarray(current_lr_arm_motor_q, dtype=np.float64).reshape(-1)
+
+    expected_nq = self.reduced_robot.model.nq
+    if q.shape != (expected_nq,):
+        raise ValueError(f"Expected arm configuration shape ({expected_nq},), got {q.shape}")
+
+    pin.framesForwardKinematics(self.reduced_robot.model, self.reduced_robot.data, q)
+
+    left_pose = np.array(self.reduced_robot.data.oMf[self.L_hand_id].homogeneous)
+    right_pose = np.array(self.reduced_robot.data.oMf[self.R_hand_id].homogeneous)
+    return left_pose, right_pose
+
+
+for _arm_ik_cls in (G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK):
+    _arm_ik_cls.get_poses = _shared_get_poses
+
 if __name__ == "__main__":
     arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = True)
     # arm_ik = H1_2_ArmIK(Unit_Test = True, Visualization = True)
