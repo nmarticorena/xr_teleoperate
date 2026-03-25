@@ -15,6 +15,28 @@ sys.path.append(parent2_dir)
 
 from teleop.utils.weighted_moving_filter import WeightedMovingFilter
 
+T_TO_UNITREE_HUMANOID_LEFT_ARM = np.array([[1, 0, 0, 0],
+                                           [0, 0,-1, 0],
+                                           [0, 1, 0, 0],
+                                           [0, 0, 0, 1]])
+
+T_TO_UNITREE_HUMANOID_RIGHT_ARM = np.array([[1, 0, 0, 0],
+                                            [0, 0, 1, 0],
+                                            [0,-1, 0, 0],
+                                            [0, 0, 0, 1]])
+
+T_ROBOT_OPENXR = np.array([[ 0, 0,-1, 0],
+                           [-1, 0, 0, 0],
+                           [ 0, 1, 0, 0],
+                           [ 0, 0, 0, 1]])
+
+T_OPENXR_ROBOT = np.array([[ 0,-1, 0, 0],
+                           [ 0, 0, 1, 0],
+                           [-1, 0, 0, 0],
+                           [ 0, 0, 0, 1]])
+
+DRAW_TRANSLATION_OFFSET = np.array([0.15, 0.0, 0.45])
+
 class G1_29_ArmIK:
     def __init__(self, Unit_Test = False, Visualization = False):
         np.set_printoptions(precision=5, suppress=True, linewidth=200)
@@ -1222,8 +1244,44 @@ def _shared_get_poses(self, current_lr_arm_motor_q=None):
     return left_pose, right_pose
 
 
+def _shared_get_draw_poses(self, head_pose, current_lr_arm_motor_q=None, pose_basis="robot"):
+    """
+    Convert IK-space end-effector poses into drawable world poses.
+
+    Inputs:
+    - current_lr_arm_motor_q: reduced-model arm configuration. If None, use self.init_data.
+    - head_pose: 4x4 robot-basis world pose of the XR head, same convention as TeleData.head_pose.
+    - pose_basis: "robot" for robot-world poses, "openxr" for Vuer/OpenXR world poses.
+    """
+    head_pose = np.asarray(head_pose, dtype=np.float64)
+    if head_pose.shape != (4, 4):
+        raise ValueError(f"Expected head_pose shape (4, 4), got {head_pose.shape}")
+
+    left_pose, right_pose = self.get_poses(current_lr_arm_motor_q)
+
+    left_robot_world = np.array(left_pose, copy=True)
+    right_robot_world = np.array(right_pose, copy=True)
+
+    left_robot_world[:3, 3] -= DRAW_TRANSLATION_OFFSET
+    right_robot_world[:3, 3] -= DRAW_TRANSLATION_OFFSET
+    left_robot_world[:3, 3] += head_pose[:3, 3]
+    right_robot_world[:3, 3] += head_pose[:3, 3]
+
+    left_xr_world = left_robot_world @ pin.SE3(T_TO_UNITREE_HUMANOID_LEFT_ARM).inverse().homogeneous
+    right_xr_world = right_robot_world @ pin.SE3(T_TO_UNITREE_HUMANOID_RIGHT_ARM).inverse().homogeneous
+    left_xr_world = T_OPENXR_ROBOT @ left_xr_world @ T_ROBOT_OPENXR
+    right_xr_world = T_OPENXR_ROBOT @ right_xr_world @ T_ROBOT_OPENXR
+
+    if pose_basis == "robot":
+        return left_robot_world, right_robot_world
+    if pose_basis == "openxr":
+        return left_xr_world, right_xr_world
+    raise ValueError(f"Unknown pose_basis: {pose_basis}")
+
+
 for _arm_ik_cls in (G1_29_ArmIK, G1_23_ArmIK, H1_2_ArmIK, H1_ArmIK):
     _arm_ik_cls.get_poses = _shared_get_poses
+    _arm_ik_cls.get_draw_poses = _shared_get_draw_poses
 
 if __name__ == "__main__":
     arm_ik = G1_29_ArmIK(Unit_Test = True, Visualization = True)

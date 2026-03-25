@@ -209,9 +209,10 @@ if __name__ == '__main__':
             arm_ik = H1_ArmIK()
             arm_ctrl = H1_ArmController(simulation_mode=args.sim)
 
-        left_p, right_p = arm_ik.get_poses()
+        tele_data = tv_wrapper.get_tele_data()
+        left_p, right_p = arm_ik.get_draw_poses(head_pose=tele_data.head_pose, pose_basis="robot")
 
-        tv_wrapper.update_robot_pose(left_p)
+        tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
 
         # end-effector
         if args.ee == "dex3":
@@ -420,9 +421,13 @@ if __name__ == '__main__':
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
-            left_p, right_p = arm_ik.get_poses(current_lr_arm_q)
+            left_p, right_p = arm_ik.get_draw_poses(
+                head_pose=tele_data.head_pose,
+                current_lr_arm_motor_q=current_lr_arm_q,
+                pose_basis="robot",
+            )
 
-            tv_wrapper.update_robot_pose(left_p)
+            tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
 
 
 
