@@ -210,7 +210,10 @@ if __name__ == '__main__':
             arm_ctrl = H1_ArmController(simulation_mode=args.sim)
 
         tele_data = tv_wrapper.get_tele_data()
-        left_p, right_p = arm_ik.get_draw_poses(head_pose=tele_data.head_pose, pose_basis="robot")
+        left_p = tele_data.left_wrist_pose.copy()
+        left_p[0, 3] -= 0.15
+        left_p[2, 3] -= 0.45
+        left_p[:3, 3] += tele_data.head_pose[:3, 3]
 
         tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
 
@@ -421,11 +424,10 @@ if __name__ == '__main__':
             current_lr_arm_q  = arm_ctrl.get_current_dual_arm_q()
             current_lr_arm_dq = arm_ctrl.get_current_dual_arm_dq()
 
-            left_p, right_p = arm_ik.get_draw_poses(
-                head_pose=tele_data.head_pose,
-                current_lr_arm_motor_q=current_lr_arm_q,
-                pose_basis="robot",
-            )
+            left_p = tele_data.left_wrist_pose.copy()
+            left_p[0, 3] -= 0.15
+            left_p[2, 3] -= 0.45
+            left_p[:3, 3] += tele_data.head_pose[:3, 3]
 
             tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
 
