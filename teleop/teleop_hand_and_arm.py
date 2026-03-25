@@ -79,6 +79,8 @@ AUTO_STOP_HOLD_SECONDS = 2.0
 
 
 def both_hands_fully_closed(tele_data) -> bool:
+    print(tele_data.left_hand_squeezeValue, tele_data.right_hand_squeezeValue)
+    print("threshold", AUTO_STOP_SQUEEZE_THRESHOLD)
     return (
         tele_data.left_hand_squeezeValue >= AUTO_STOP_SQUEEZE_THRESHOLD
         and tele_data.right_hand_squeezeValue >= AUTO_STOP_SQUEEZE_THRESHOLD
