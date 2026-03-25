@@ -209,6 +209,10 @@ if __name__ == '__main__':
             arm_ik = H1_ArmIK()
             arm_ctrl = H1_ArmController(simulation_mode=args.sim)
 
+        left_p, right_p = arm_ik.get_poses()
+
+        tv_wrapper.update_robot_pose(left_p)
+
         # end-effector
         if args.ee == "dex3":
             from teleop.robot_control.robot_hand_unitree import Dex3_1_Controller
