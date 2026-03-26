@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [tasks]
 set_quest = {cmd = "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem"}
-teleop_sim = {cmd = "python teleop_hand_and_arm.py --input-mode=controller --ee=inspire_dfx --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record --display-mode ego" , cwd = "teleop"}
+teleop_sim = {cmd = "python teleop_hand_and_arm.py --input-mode=hand --ee=inspire_dfx --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record --display-mode ego" , cwd = "teleop"}
 teleop_real = {cmd = "python teleop_hand_and_arm.py --input-mode=hand --ee=inspire_ftp --img-server-ip 192.168.123.164 --network-interface enx00e04c8800ba  --arm=G1_29 --record --display-mode ego" , cwd = "teleop"}
 teleop_1d = {cmd = "python teleop_hand_and_arm.py --input-mode=controller --ee=dex1 --img-server-ip 10.68.60.142  --arm=G1_23 --sim --record --display-mode ego" , cwd = "teleop"}
 
@@ -19,7 +19,7 @@ PANDA_IP = "172.16.0.2"
 G1_IP = "192.168.123.164"
 G1_NETWORK_INTERFACE = "enx00e04c8800ba"
 UNITREE_HOST_IP = "192.168.123.123" # Ip of local host computer for the connecting to the G1
-CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface address='192.168.123.123'/></Interfaces></General></Domain></CycloneDDS>"
+# CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface address='192.168.123.123'/></Interfaces></General></Domain></CycloneDDS>"
 
 [dependencies]
 cuda-version = "12.6.*"
