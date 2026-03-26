@@ -1,4 +1,5 @@
 import os
+import shutil
 import traceback
 import cv2
 import json
@@ -217,6 +218,23 @@ class EpisodeWriter():
         """
         self.need_save = True  # Set the save flag
         logger_mp.info(f"==> Episode saved start...")
+
+    def discard_episode(self):
+        """
+        Discard the current episode without saving it.
+        """
+        self.item_data_queue.join()
+
+        if self.is_available:
+            logger_mp.info("==> No active episode to discard.")
+            return
+
+        self.need_save = False
+        if os.path.isdir(self.episode_dir):
+            shutil.rmtree(self.episode_dir, ignore_errors=True)
+
+        self.is_available = True
+        logger_mp.info(f"==> Episode discarded: {self.episode_dir}.")
 
     def _save_episode(self):
         """

@@ -38,6 +38,7 @@ STOP           = False  # Enable to begin system exit procedure
 READY          = False  # Ready to (1) enter START state, (2) enter RECORD_RUNNING state
 RECORD_RUNNING = False  # True if [Recording]
 RECORD_TOGGLE  = False  # Toggle recording state
+RECORD_DISCARD_TOGGLE = False  # Toggle discard state for current recording
 #  -------        ---------                -----------                -----------            ---------
 #   state          [Ready]      ==>        [Recording]     ==>         [AutoSave]     -->     [Ready]
 #  -------        ---------      |         -----------      |         -----------      |     ---------
@@ -51,7 +52,7 @@ RECORD_TOGGLE  = False  # Toggle recording state
 #  --> auto  : Auto-transition after saving data.
 
 def on_press(key):
-    global STOP, START, RECORD_TOGGLE
+    global STOP, START, RECORD_TOGGLE, RECORD_DISCARD_TOGGLE
     if key == 'r':
         START = True
     elif key == 'q':
@@ -59,6 +60,8 @@ def on_press(key):
         STOP = True
     elif key == 's' and START == True:
         RECORD_TOGGLE = True
+    elif key == 'd' and START == True:
+        RECORD_DISCARD_TOGGLE = True
     else:
         logger_mp.warning(f"[on_press] {key} was pressed, but no action is defined for this key.")
 
@@ -212,7 +215,7 @@ if __name__ == '__main__':
         tele_data = tv_wrapper.get_tele_data()
         left_p, right_p = arm_ik.get_draw_poses(head_pose=tele_data.head_pose, pose_basis="robot")
 
-        tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
+        tv_wrapper.set_robot_pose_marker(left_p, pose_basis="robot")
 
         # end-effector
         if args.ee == "dex3":
@@ -311,6 +314,7 @@ if __name__ == '__main__':
         logger_mp.info("🟢  Press [r] to start syncing the robot with your movements.")
         if args.record:
             logger_mp.info("🟡  Press [s] to START or SAVE recording (toggle cycle).")
+            logger_mp.info("🟠  Press [d] to STOP and DISCARD the current recording.")
         else:
             logger_mp.info("🔵  Recording is DISABLED (run with --record to enable).")
         logger_mp.info("⚠️  IMPORTANT: Please keep your distance and stay safe.")
@@ -344,6 +348,16 @@ if __name__ == '__main__':
                     right_wrist_img = img_client.get_right_wrist_frame()
 
             # record mode
+            if args.record and RECORD_DISCARD_TOGGLE:
+                RECORD_DISCARD_TOGGLE = False
+                if RECORD_RUNNING:
+                    RECORD_RUNNING = False
+                    recorder.discard_episode()
+                    if args.sim:
+                        publish_reset_category(1, reset_pose_publisher)
+                else:
+                    logger_mp.warning("Discard requested, but no recording is currently running.")
+
             if args.record and RECORD_TOGGLE:
                 RECORD_TOGGLE = False
                 if not RECORD_RUNNING:
@@ -427,7 +441,7 @@ if __name__ == '__main__':
                 pose_basis="robot",
             )
 
-            tv_wrapper.update_robot_pose(left_p, pose_basis="robot")
+            tv_wrapper.set_robot_pose_marker(left_p, pose_basis="robot")
 
 
 
